@@ -47,6 +47,7 @@ import time
 
 import numpy as np
 import re
+from array import array
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -131,13 +132,28 @@ def render(pair):
 
 
 def load_split(path, tok, seq, limit=0):
-    """Concatenate pairs into fixed-length blocks, keeping a per-token loss mask."""
-    xs, ms = [], []
-    stream, smask = [], []
+    """Stream a split into two compact arrays, then cut it into blocks.
+
+    The first version built a Python list of every token id. On the repertory corpus
+    (134 MB of JSONL) that is tens of millions of ints at 28 bytes each and it dies with
+    MemoryError before training starts. Streaming into array('i') is 4 bytes a token, and
+    the blocks are sliced out of the array at batch time rather than materialised.
+
+    Returns (ids, mask, nblocks) or (None, None, 0).
+    """
+    # uint16 is enough for any vocabulary under 65,536 and halves the footprint of a
+    # long corpus: the repertory split is ~80 M tokens, which is 320 MB as int32 and
+    # 160 MB as uint16. The container here caps at 1.5 GB.
+    ids = array("H" if tok.vocab_size() < 65536 else "I")
+    mask = array("b")
+    started = time.time()
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh):
             if limit and n >= limit:
                 break
+            if n and n % 50000 == 0:
+                print("  ... %d pairs, %.0f M tokens, %.0fs" % (n, len(ids) / 1e6, time.time() - started),
+                      flush=True)
             try:
                 pair = json.loads(line)
             except ValueError:
@@ -145,18 +161,24 @@ def load_split(path, tok, seq, limit=0):
             prompt, answer = render(pair)
             p_ids = [BOS] + tok.encode(prompt)
             a_ids = tok.encode(answer) + [EOS]
-            stream.extend(p_ids + a_ids)
-            smask.extend([0] * len(p_ids) + [1] * len(a_ids))
-    # chunk the concatenated stream, not each pair separately
-    for i in range(0, len(stream) - seq - 1, seq):
-        xs.append(stream[i:i + seq + 1])
-        ms.append(smask[i + 1:i + seq + 1])  # mask for the *predicted* token
-    if not xs:
-        return None, None
-    X = torch.tensor([x[:-1] for x in xs], dtype=torch.long)
-    Y = torch.tensor([x[1:] for x in xs], dtype=torch.long)
-    M = torch.tensor([m for m in ms], dtype=torch.float)
-    return (X, Y, M), len(xs)
+            ids.extend(p_ids)
+            ids.extend(a_ids)
+            mask.extend(bytes(len(p_ids)))
+            mask.extend(b"\x01" * len(a_ids))
+    if len(ids) < seq + 2:
+        return None, None, 0
+    ids = np.frombuffer(ids, dtype=np.uint16 if ids.typecode == "H" else np.uint32)
+    mask = np.frombuffer(mask, dtype=np.int8)
+    nblocks = (len(ids) - 1) // seq
+    return ids, mask, nblocks
+
+
+def batch(ids, mask, seq, idx):
+    """Cut `idx` blocks out of the stream. X is the block, Y is it shifted by one."""
+    x = np.stack([ids[i * seq:i * seq + seq] for i in idx]).astype(np.int64)
+    y = np.stack([ids[i * seq + 1:i * seq + seq + 1] for i in idx]).astype(np.int64)
+    m = np.stack([mask[i * seq + 1:i * seq + seq + 1] for i in idx]).astype(np.float32)
+    return torch.from_numpy(x), torch.from_numpy(y), torch.from_numpy(m)
 
 
 # ---------------------------------------------------------------- model
@@ -246,12 +268,14 @@ def lr_at(step, total, base, warm=50):
 def train(args):
     tok = make_tokenizer(args)
     V = tok.vocab_size()
-    tr, ntr = load_split(os.path.join(args.corpus, args.model + ".train.jsonl"), tok, args.seq, args.limit)
-    ev, nev = load_split(os.path.join(args.corpus, args.model + ".eval.jsonl"), tok, args.seq)
-    if tr is None:
+    t0 = time.time()
+    ids, mask, ntr = load_split(os.path.join(args.corpus, args.model + ".train.jsonl"),
+                                tok, args.seq, args.limit)
+    if ids is None:
         sys.exit("no training blocks in %s" % args.corpus)
-    X, Y, M = tr
-    print("train blocks %d  eval blocks %d  tokens/block %d" % (ntr, nev or 0, args.seq))
+    eids, emask, nev = load_split(os.path.join(args.corpus, args.model + ".eval.jsonl"), tok, args.seq)
+    print("train blocks %d  eval blocks %d  tokens/block %d  loaded in %.1fs (%.0f MB)"
+          % (ntr, nev or 0, args.seq, time.time() - t0, ids.nbytes / 1e6))
 
     model = TinyLM(V, args.dim, args.layers, args.heads, args.ff, args.seq)
     n = model.n_params()
@@ -264,8 +288,8 @@ def train(args):
     for step in range(args.steps):
         for g in opt.param_groups:
             g["lr"] = lr_at(step, args.steps, args.lr)
-        idx = torch.randint(0, X.shape[0], (args.batch,))
-        xb, yb, mb = X[idx], Y[idx], M[idx]
+        idx = np.random.randint(0, ntr, args.batch)
+        xb, yb, mb = batch(ids, mask, args.seq, idx)
         logits = model(xb)
         loss_tok = F.cross_entropy(logits.reshape(-1, V), yb.reshape(-1), reduction="none")
         denom = mb.reshape(-1).sum().clamp(min=1)
@@ -280,16 +304,17 @@ def train(args):
                   (step, loss.item(), opt.param_groups[0]["lr"], time.time() - t0))
 
     eval_loss = None
-    if ev is not None:
+    if eids is not None and nev:
         model.eval()
         with torch.no_grad():
-            eX, eY, eM = ev
             tot, den = 0.0, 0.0
-            for i in range(0, eX.shape[0], args.batch):
-                lg = model(eX[i:i + args.batch])
-                l = F.cross_entropy(lg.reshape(-1, V), eY[i:i + args.batch].reshape(-1), reduction="none")
-                tot += (l * eM[i:i + args.batch].reshape(-1)).sum().item()
-                den += eM[i:i + args.batch].reshape(-1).sum().item()
+            for i in range(0, nev, args.batch):
+                idx = np.arange(i, min(i + args.batch, nev))
+                ex, ey, em = batch(eids, emask, args.seq, idx)
+                lg = model(ex)
+                l = F.cross_entropy(lg.reshape(-1, V), ey.reshape(-1), reduction="none")
+                tot += (l * em.reshape(-1)).sum().item()
+                den += em.reshape(-1).sum().item()
             eval_loss = tot / max(den, 1)
         print("  eval loss %.4f  (perplexity %.1f)" % (eval_loss, math.exp(min(eval_loss, 20))))
 
