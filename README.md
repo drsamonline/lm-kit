@@ -174,6 +174,12 @@ tests/     a smoke test that runs without the repositories or the network
 
 ## Documentation
 
+| | |
+|---|---|
+| [`docs/API.md`](docs/API.md) | every option and function, generated from the source by `tools/gen-api.py` |
+| [`docs/AUDIT.md`](docs/AUDIT.md) | the nine findings from the release-gate review, and what was fixed |
+| [`docs/EVAL.md`](docs/EVAL.md) | the measured numbers, with intervals, and why the BPE model fails |
+
 Start with `docs/LM-KIT-project-dossier.docx` — eight pages covering the whole arc: how the fleet
 was read, what it contains, which models are worth building, what the corpora measure, what was
 built and run, what the external research changed, and what is left.
