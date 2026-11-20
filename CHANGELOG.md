@@ -16,6 +16,10 @@ The budget is 192. Re-measured on the same 20 pairs:
 More training helped and the cap stopped truncating. "The format is learned, the vocabulary is not"
 was too pessimistic, for a reason that had nothing to do with the model.
 
+Continued to ~840 steps, the loss kept falling and field accuracy did not: 0.350 at 600, 0.313 at
+840, overlapping intervals. That is the shape of a capacity limit, and it points at the 15 M model
+rather than more CPU hours.
+
 ## 0.6.0 — 20 November 2026
 
 **The evaluator scores tasks, not just JSON.** `lm-eval.py --task rep` adds `id_exact` (was the

@@ -117,6 +117,20 @@ pairs, same scorer:
 | 180 | 0.600 (0.400–0.800) | 0.067 (0.025–0.108) |
 | ~600 | **1.000** | **0.350 (0.282–0.418)** |
 
+Training was then continued to about 840 steps:
+
+| Steps | Eval loss | json_valid | field_match |
+|---|---|---|---|
+| 180 | 1.0083 | 0.600 | 0.067 (0.025–0.108) |
+| ~600 | 0.7616 | 1.000 | 0.350 (0.282–0.418) |
+| ~840 | 0.6955 | 1.000 | 0.313 (0.253–0.377) |
+
+The loss kept falling and the field accuracy did not move. Between 600 and 840 steps the model got
+better at predicting the corpus and no better at the task, which is what a capacity limit looks like
+rather than a step limit. The intervals overlap, and with twenty pairs and one seed the two readings
+cannot be separated here — but the shape is the one to test against the 15 M model, not against more
+CPU hours.
+
 Two things changed. More training helped — the format goes from mostly-right to always-right and
 the values from 7% to 35% — and the scorer stopped truncating.
 
