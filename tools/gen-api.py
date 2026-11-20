@@ -29,6 +29,7 @@ TOOLS = [
     ("lm-rebuild.py", "Retrain a drifted model and publish it only if it passes its gate."),
     ("lm-registry.py", "Keep the last two versions of each model, and roll back."),
     ("lm-delta.py", "Measure how much a continuation differs from its base."),
+    ("lm-prune.py", "Remove feed-forward channels and shrink the model, for a retrain."),
     ("gen-api.py", "Write this page from the source."),
 ]
 

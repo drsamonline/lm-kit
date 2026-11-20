@@ -107,6 +107,27 @@ applies it at load:
 A 1.1 MB int8 base plus a 338 KB adapter produces output byte-identical to the PyTorch LoRA model.
 The adapter is fp32 here; stored the way the weights are it is 86 KB.
 
+## Structured pruning
+
+`lm-prune.py` removes whole feed-forward channels — rows from w1 and w3, the matching columns from
+w2 — and shrinks `ff`. Each is retrained for the same 40 steps from the same checkpoint, so the
+comparison is at equal steps.
+
+| Run | Parameters | ff | Eval loss | vs unpruned |
+|---|---|---|---|---|
+| unpruned | 1,083,520 | 512 | **1.3024** | — |
+| pruned 75% | 886,912 | 384 | 1.3551 | −18.1% |
+| pruned 50% | 690,304 | 256 | **1.3253** | −36.3% |
+
+Half the feed-forward channels can go for about 2% of the eval loss. The 50% run beats the 75% run,
+which is almost certainly noise — one seed, one split, forty steps of recovery — but the direction
+is not in doubt: **the feed-forward is heavily over-parameterised at this size, and pruning works
+where 4-bit quantisation did not.**
+
+That contrast is worth stating plainly. Q4 removed 50% of the bits and destroyed the model. Pruning
+removed 36% of the parameters and cost 2% of the loss. The difference is that pruning removes whole
+channels that the retrain can compensate for, while quantisation perturbs every weight at once.
+
 ## The gates each production model must clear
 
 | Model | Metric | Threshold |

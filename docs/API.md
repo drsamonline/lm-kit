@@ -15,6 +15,7 @@ runs `gen-api.py --check` and fails when the two disagree.
 | [`lm-rebuild.py`](../tools/lm-rebuild.py) | lm-rebuild — close the loop: drift in, gated checkpoint out. |
 | [`lm-registry.py`](../tools/lm-registry.py) | lm-registry — versioned model storage with a way back. |
 | [`lm-delta.py`](../tools/lm-delta.py) | lm-delta — how big is the difference between a base model and its continuation? |
+| [`lm-prune.py`](../tools/lm-prune.py) | lm-prune — structured pruning of the feed-forward, measured before it is trusted. |
 | [`gen-api.py`](../tools/gen-api.py) | gen-api — write docs/API.md from the source, so the reference cannot describe a flag that is gone. |
 
 Usage, worked examples and the measured numbers are in the [README](../README.md).
@@ -254,6 +255,25 @@ lm-delta — how big is the difference between a base model and its continuation
 | `--tuned` | required |  |
 | `--out` | default `""` |  |
 | `--verbose` | store_true |  |
+
+| function | arguments | returns |
+|---|---|---|
+| `load` | `run` |  |
+| `main` | `` |  |
+
+
+---
+
+## `lm-prune.py`
+
+lm-prune — structured pruning of the feed-forward, measured before it is trusted.
+
+| option | takes | what it does |
+|---|---|---|
+| `--run` | required |  |
+| `--keep` | `float` default `0.75` | fraction of ff channels to keep |
+| `--out` | required |  |
+| `--dry-run` | store_true |  |
 
 | function | arguments | returns |
 |---|---|---|

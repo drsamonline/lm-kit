@@ -2,6 +2,15 @@
 
 Newest first. Every entry says what changed and what it cost.
 
+## 0.5.0 — 20 November 2026
+
+**Pruning works where quantisation did not.** `lm-prune.py` removes whole feed-forward channels and
+shrinks `ff`; at equal recovery steps, 36% of the parameters go for about 2% of the eval loss
+(1.3253 against 1.3024). Q4 removed 50% of the bits and destroyed the model.
+
+Also in this release: `lm-export-c.py --adapter` and `lm --delta`, so an adapter ships as its own
+file and the kernel applies it at load — verified byte-identical to PyTorch.
+
 ## 0.4.0 — 20 November 2026
 
 **Two claims tested, one of them withdrawn.**
