@@ -176,15 +176,17 @@ tests/     a smoke test that runs without the repositories or the network
 
 | | |
 |---|---|
+| [`docs/DOSSIER.md`](docs/DOSSIER.md) | the whole project in one file — analysis, family, measurements, mistakes |
 | [`docs/API.md`](docs/API.md) | every option and function, generated from the source by `tools/gen-api.py` |
 | [`docs/AUDIT.md`](docs/AUDIT.md) | the nine findings from the release-gate review, and what was fixed |
 | [`docs/EVAL.md`](docs/EVAL.md) | the measured numbers, with intervals, and why the BPE model fails |
 
-Start with `docs/LM-KIT-project-dossier.docx` — eight pages covering the whole arc: how the fleet
-was read, what it contains, which models are worth building, what the corpora measure, what was
-built and run, what the external research changed, and what is left.
+Start with [`docs/DOSSIER.md`](docs/DOSSIER.md). It covers the whole arc: how the fleet was read,
+what it contains, which models are worth building, what the corpora measure, what was built and run,
+what the external research changed, and what is left.
 
-The five earlier documents are kept as the detailed per-topic versions.
+The `.docx` files in `docs/` are the same material formatted for circulation, and the five earlier
+proposals are kept as the detailed per-topic versions.
 
 ## Licence
 
