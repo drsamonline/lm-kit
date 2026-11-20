@@ -51,6 +51,29 @@ python3 tools/lm-eval.py --run ../run-act-bpe --corpus ../corpus --model act \
 # GATE FAILED: json_valid 0.000 < 0.900; field_match 0.000 < 0.700
 ```
 
+## Quantisation at 1 M parameters
+
+The size ladder says Q4 halves int8. At this size it also breaks the model, and the same weights
+in PyTorch produce the same break, so this is the quantiser and not the kernel.
+
+| Weights | Size | Output |
+|---|---|---|
+| fp32 | 4.3 MB | `{"api": "Deanmert", "auth": "none", "cat` |
+| int8, per-row scale | 1.1 MB | `{"api": "Deatang", "auth": "none", "cat` |
+| **q4, per-row scale** | **0.58 MB** | `{"api": "Dainininmintinininininininmanti` |
+| q4, 32-element groups | 0.58 MB | `{"api": "Deanminmi", "auth": "none", "ca` |
+| q4, 16-element groups | 0.58 MB | `{"api": "Seanmininininenmens", "auth": ` |
+
+The int8 model is barely degraded. The 4-bit one collapses into a repeating token, and finer
+grouping only moves it from collapsed to nearly collapsed.
+
+The reason is arithmetic: 1.08 M parameters with a 264-token embedding table leaves about 4,000
+parameters per token, so a 7% relative error per weight is not absorbed anywhere. An 8 B model has
+six thousand times the parameters to absorb it, which is why the ternary and 4-bit results in the
+literature are reported at 2 B and above.
+
+**int8 is the floor at this size.** Q4 belongs on the 20 M models, and it is unmeasured there.
+
 ## The gates each production model must clear
 
 | Model | Metric | Threshold |

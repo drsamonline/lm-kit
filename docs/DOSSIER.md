@@ -168,6 +168,11 @@ emits an ID, the kit resolves it, and an ID that is not in the index is discarde
 | Entropy coding | 3–8% | the final archive |
 | Ternary weights | 2.5× | proven at 2 B (BitNet 2B4T: 0.4 GB, 30–45 tok/s on a laptop CPU); unproven at 3 M |
 
+**Measured exception.** Q4 breaks the 1.08 M demo model: per-row scales collapse the output to a
+repeating token, and 32-element groups only get it back to nearly collapsed. int8 survives with
+almost no visible degradation. The Q4 column above applies to the 20 M models and up; at 1 M,
+int8 is the floor. Details in [`EVAL.md`](EVAL.md).
+
 | Tier | Budget | Runtime | What fits |
 |---|---|---|---|
 | S script | 0.8–2 MB | plain JavaScript, no WASM | 3 M params at Q4 as base64 in one file |

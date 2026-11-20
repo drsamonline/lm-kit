@@ -107,6 +107,25 @@ static float *dequant_rows(Tensor *w, Tensor *scale, int rows, int cols) {
     return out;
 }
 
+/* 4-bit, two values a byte, one fp32 scale per row */
+static float *dequant_q4(Tensor *w, Tensor *scale, int rows, int cols) {
+    float *out = malloc(sizeof(float) * rows * cols);
+    const uint8_t *q = (const uint8_t *)w->raw;
+    const float *s = (const float *)scale->raw;
+    int packed_cols = (int)w->dims[w->ndim - 1];
+    for (int r = 0; r < rows; r++) {
+        const uint8_t *row = q + (size_t)r * packed_cols;
+        float sc = s[r];
+        for (int c = 0; c < cols; c++) {
+            uint8_t b = row[c >> 1];
+            int v = (c & 1) ? (b >> 4) : (b & 0x0F);
+            if (v >= 8) v -= 16;
+            out[(size_t)r * cols + c] = v * sc;
+        }
+    }
+    return out;
+}
+
 static float *dequant_plain(Tensor *w) {
     float *out = malloc(w->nbytes);
     memcpy(out, w->raw, w->nbytes);
@@ -121,6 +140,7 @@ static float *get_mat(Tensor *t, uint32_t n, const char *base, int rows, int col
     snprintf(sname, sizeof sname, "%s.scale", base);
     Tensor *s = find(t, n, sname);
     if (!s) { fprintf(stderr, "missing scale for %s\n", base); exit(1); }
+    if (w->dtype == 3) return dequant_q4(w, s, rows, cols);
     return dequant_rows(w, s, rows, cols);
 }
 
