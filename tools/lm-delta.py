@@ -43,8 +43,27 @@ def main():
 
     cfg_b, base = load(a.base)
     cfg_t, tuned = load(a.tuned)
-    if cfg_b != cfg_t:
-        sys.exit("the two checkpoints do not share a configuration")
+    arch = ("vocab", "dim", "layers", "heads", "ff", "seq")
+    if any(cfg_b.get(k) != cfg_t.get(k) for k in arch):
+        sys.exit("the two checkpoints do not share an architecture")
+
+    # a LoRA run stores adapters beside the frozen weights; report those, not a dense difference
+    adapters = {k: v for k, v in tuned.items() if k.endswith((".A", ".B"))}
+    if adapters:
+        n = sum(v.numel() for v in adapters.values())
+        # the model's own count, not the sum of its state dict: that includes buffers
+        full = cfg_b.get("params") or sum(v.numel() for k, v in base.items()
+                                          if not k.endswith((".A", ".B")))
+        print("a low-rank adapter, not a dense difference")
+        print("  base parameters     {:,}".format(full))
+        print("  adapter parameters  {:,}  ({:.1f}% of the base)".format(n, 100 * n / full))
+        print("  stored as int8      {:.2f} MB against {:.2f} MB for the model"
+              .format(n / 1e6, full / 1e6))
+        print()
+        print("  eight such deltas   {:.2f} MB plus one {:.2f} MB base = {:.2f} MB"
+              .format(8 * n / 1e6, full / 1e6, (8 * n + full) / 1e6))
+        print("  eight full models   {:.2f} MB".format(8 * full / 1e6))
+        return 0
 
     total_params = 0
     total_delta = 0.0

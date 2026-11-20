@@ -88,6 +88,7 @@ lm-train — train one small model from a harvested corpus.
 |---|---|---|
 | `--corpus` | flag |  |
 | `--model` | default `"act"` |  |
+| `--lora` | `int` default `0` | train low-rank adapters of this rank instead of the whole model |
 | `--resume` | store_true | continue from model.pt already in --out, instead of starting fresh |
 | `--out` | flag |  |
 | `--dim` | `int` default `128` |  |
@@ -112,6 +113,7 @@ lm-train — train one small model from a harvested corpus.
 | `batch` | `ids, mask, seq, idx` | Cut `idx` blocks out of the stream. X is the block, Y is it shifted by one. |
 | `rope_cache` | `seq, dim, base=10000.0` |  |
 | `apply_rope` | `x, cos, sin` |  |
+| `add_lora` | `model, r, alpha=16` | Wrap every attention and MLP projection. Embeddings and norms stay as they are. |
 | `lr_at` | `step, total, base, warm=50` |  |
 | `train` | `args` |  |
 | `corpus_hash` | `corpus, model` |  |

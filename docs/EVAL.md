@@ -74,6 +74,28 @@ literature are reported at 2 B and above.
 
 **int8 is the floor at this size.** Q4 belongs on the 20 M models, and it is unmeasured there.
 
+## One base, several deltas
+
+The family design says a shared base plus a small delta per speciality. Measured three ways on the
+`act` model, all on the same held-out split:
+
+| Method | Trainable | Eval loss | Delta size |
+|---|---|---|---|
+| base only | — | 2.0861 | — |
+| full fine-tune | 1,083,520 | 1.6276 | 1.08 MB, dense |
+| **LoRA rank 8** | **86,016 (7.9%)** | **1.7138** | **0.09 MB** |
+
+A dense difference is 3.4% of the base in norm but only 27% of its entries are dead, so storing it
+costs what storing the model costs. Low-rank training produces the thing the design assumed:
+
+```
+eight deltas   0.69 MB  +  one base 1.08 MB  =  1.77 MB
+eight models                                  =  8.67 MB
+```
+
+LoRA reaches 1.7138 against the full fine-tune's 1.6276, so it gives up about 5% of the improvement
+for 8% of the storage. That is the trade the family depends on, and it holds.
+
 ## The gates each production model must clear
 
 | Model | Metric | Threshold |

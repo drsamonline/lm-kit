@@ -14,6 +14,10 @@ Newest first. Every entry says what changed and what it cost.
   the floor at this size. Measured, in `docs/EVAL.md`.
 - `lm-train.py --resume` — the trainer can now continue from a checkpoint. Before this it silently
   started fresh, which means `lm-rebuild`'s warm start was a copy that changed nothing.
+- `lm-train.py --lora R` — low-rank adapters. Rank 8 on the demo model is 86,016 trainable
+  parameters (7.9%), reaches eval 1.7138 against the full fine-tune's 1.6276, and stores as 0.09 MB.
+  Eight deltas plus one base is 1.77 MB against 8.67 MB for eight models, so the family's
+  shared-base claim holds once the delta is low-rank rather than a difference of two fine-tunes.
 
 ## 0.3.0 — 20 November 2026
 

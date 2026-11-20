@@ -234,6 +234,47 @@ class Block(nn.Module):
         return x + h
 
 
+
+class LoRALinear(nn.Module):
+    """A frozen Linear plus a low-rank update: y = Wx + (alpha/r) * B(Ax).
+
+    B starts at zero, so a freshly wrapped model computes exactly what the base model computed.
+    Only A and B train, which is the point: the delta is r*(in+out) numbers instead of in*out,
+    and that is what makes one base plus several deltas smaller than several models.
+    """
+
+    def __init__(self, base, r=8, alpha=16):
+        super().__init__()
+        self.base = base
+        for p in self.base.parameters():
+            p.requires_grad = False
+        self.r = r
+        self.scale = alpha / r
+        self.A = nn.Parameter(torch.zeros(r, base.in_features))
+        nn.init.kaiming_uniform_(self.A, a=5 ** 0.5)
+        self.B = nn.Parameter(torch.zeros(base.out_features, r))
+
+    def forward(self, x):
+        return self.base(x) + self.scale * (x @ self.A.T @ self.B.T)
+
+
+def add_lora(model, r, alpha=16):
+    """Wrap every attention and MLP projection. Embeddings and norms stay as they are."""
+    n = 0
+    for blk in model.blocks:
+        for name in ("qkv", "proj", "w1", "w3", "w2"):
+            setattr(blk, name, LoRALinear(getattr(blk, name), r, alpha))
+            n += 1
+    for p in model.parameters():
+        p.requires_grad = False
+    for blk in model.blocks:
+        for name in ("qkv", "proj", "w1", "w3", "w2"):
+            lay = getattr(blk, name)
+            lay.A.requires_grad = True
+            lay.B.requires_grad = True
+    return n
+
+
 class TinyLM(nn.Module):
     def __init__(self, vocab, d=128, layers=4, heads=4, ff=512, seq=256):
         super().__init__()
@@ -286,6 +327,13 @@ def train(args):
             sys.exit("--resume needs %s" % prior)
         model.load_state_dict(torch.load(prior, map_location="cpu"))
         print("resumed from %s" % prior)
+
+    if args.lora:
+        wrapped = add_lora(model, args.lora)
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total = sum(p.numel() for p in model.parameters())
+        print("lora rank {} on {} projections: {:,} trainable of {:,} ({:.1f} pct)"
+              .format(args.lora, wrapped, trainable, total, 100 * trainable / total))
     n = model.n_params()
     print("parameters {:,}  ({:.2f} MB at int8)".format(n, n / 1e6))
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.1)
@@ -395,6 +443,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus")
     ap.add_argument("--model", default="act")
+    ap.add_argument("--lora", type=int, default=0,
+                    help="train low-rank adapters of this rank instead of the whole model")
     ap.add_argument("--resume", action="store_true",
                     help="continue from model.pt already in --out, instead of starting fresh")
     ap.add_argument("--out")
