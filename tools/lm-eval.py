@@ -20,8 +20,8 @@ Metrics
   json_valid    the generated text parses as a JSON object
   exact         the parsed object equals the expected one exactly
   field_match   mean fraction of expected fields present and equal
-  refuse_ok     for pairs whose output carries no answer, the model emitted something invalid
-                rather than a confident wrong object
+and every rate carries a 95% bootstrap interval, because a rate over twenty items is not a
+rate over a corpus. The denominator is printed next to every number for the same reason.
 
 Exit code is 1 when any --gate threshold is missed, so CI can use it.
 """
@@ -33,6 +33,7 @@ import os
 import re
 import sys
 
+import numpy as np
 import torch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -51,8 +52,14 @@ train = load("lm_train", os.path.join(HERE, "lm-train.py"))
 # ---------------------------------------------------------------- generate
 @torch.no_grad()
 def generate_one(model, tok, prompt, seq, max_new=96):
+    """Greedy, stopping when the JSON object closes.
+
+    The scorer only reads the first balanced {...}, so generating past its closing brace
+    cannot change the score. Stopping there is most of the runtime: a byte-level model
+    otherwise runs the full 96 tokens for every pair, each one re-reading the whole prefix.
+    """
     ids = [train.BOS] + tok.encode("IN: %s\nOUT: " % prompt)
-    out = []
+    out, depth, opened = [], 0, False
     for _ in range(max_new):
         ctx = torch.tensor([ids[-seq:]])
         nxt = int(model(ctx)[0, -1].argmax())
@@ -60,6 +67,14 @@ def generate_one(model, tok, prompt, seq, max_new=96):
             break
         ids.append(nxt)
         out.append(nxt)
+        ch = tok.decode([nxt])
+        if ch == "{":
+            depth += 1
+            opened = True
+        elif ch == "}" and opened:
+            depth -= 1
+            if depth <= 0:
+                break
     return tok.decode(out)
 
 
@@ -109,13 +124,24 @@ def field_score(expected, got):
     return hits / len(keys)
 
 
+def bootstrap(values, resamples, alpha=0.05):
+    """Percentile bootstrap. Returns (lo, hi) for the mean."""
+    if not values:
+        return (0.0, 0.0)
+    v = np.array(values, dtype=np.float64)
+    idx = np.random.randint(0, len(v), size=(resamples, len(v)))
+    means = v[idx].mean(axis=1)
+    return (float(np.quantile(means, alpha / 2)), float(np.quantile(means, 1 - alpha / 2)))
+
+
 # ---------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--model", required=True, help="corpus name, e.g. act")
-    ap.add_argument("--limit", type=int, default=60)
+    ap.add_argument("--limit", type=int, default=0, help="0 = every held-out pair")
+    ap.add_argument("--boot", type=int, default=2000, help="bootstrap resamples")
     ap.add_argument("--gate", action="append", default=[],
                     help="metric=threshold, repeatable, e.g. json_valid=0.9")
     ap.add_argument("--out", default=None, help="write the result json here")
@@ -136,18 +162,22 @@ def main():
     rows = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:
-            if len(rows) >= a.limit:
+            if a.limit and len(rows) >= a.limit:
                 break
             rows.append(json.loads(line))
 
     valid = exact = 0
     fields = []
+    valid_flags = []
     examples = []
-    for r in rows:
+    for i, r in enumerate(rows):
+        if i and i % 10 == 0:
+            print("  ... %d/%d" % (i, len(rows)), flush=True)
         text = generate_one(model, tok, r["input"], cfg["seq"])
         got = parse_json(text)
         ok_json = got is not None
         valid += ok_json
+        valid_flags.append(1.0 if ok_json else 0.0)
         f = field_score(r["output"], got) if ok_json else 0.0
         fields.append(f)
         exact += (f == 1.0)
@@ -156,17 +186,24 @@ def main():
                              "got": text[:120], "field_score": round(f, 3)})
 
     n = max(len(rows), 1)
+    total = sum(1 for _ in open(path, encoding="utf-8"))
     result = {
-        "run": a.run, "model": a.model, "n": len(rows),
+        "run": a.run, "model": a.model, "n": len(rows), "held_out": total,
         "json_valid": round(valid / n, 4),
         "exact": round(exact / n, 4),
         "field_match": round(sum(fields) / n, 4),
         "examples": examples,
     }
-    print("%-14s n=%d" % (a.model, len(rows)))
-    print("  json_valid   %.3f" % result["json_valid"])
+    lo, hi = bootstrap(valid_flags, a.boot)
+    flo, fhi = bootstrap(fields, a.boot)
+    result["json_valid_ci"] = [round(lo, 3), round(hi, 3)]
+    result["field_match_ci"] = [round(flo, 3), round(fhi, 3)]
+    print("%-14s %d of %d held-out pairs" % (a.model, len(rows), total))
+    print("  json_valid   %.3f   95%% CI %.3f-%.3f" % (result["json_valid"], lo, hi))
     print("  exact        %.3f" % result["exact"])
-    print("  field_match  %.3f" % result["field_match"])
+    print("  field_match  %.3f   95%% CI %.3f-%.3f" % (result["field_match"], flo, fhi))
+    if len(rows) < total:
+        print("  note: a sample, not the split — run without --limit before quoting it")
     print("  examples")
     for e in examples[:3]:
         print("    in   %s" % e["input"])
