@@ -183,6 +183,107 @@ static void load_model(Model *m, const char *path) {
     free(t);
 }
 
+
+/* ------------------------------------------------------------- tokenizer */
+
+/*
+ * Byte-level BPE. The merges travel inside the .lmk as an int32 [n][2] tensor, so the
+ * kernel tokenises the same way the trainer did without a second file or a runtime.
+ */
+
+#define HBITS 17
+#define HSIZE (1 << HBITS)
+
+typedef struct {
+    int n;              /* number of merges */
+    int32_t *pairs;     /* n * 2 */
+    int32_t *rank_key;  /* open-addressed: a * 8192 + b, -1 when empty */
+    int32_t *rank_val;
+    unsigned char **expand;  /* id -> bytes */
+    int *expand_len;
+    int vocab;
+} Tok;
+
+static uint32_t hash32(uint32_t x) {
+    x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16;
+    return x;
+}
+
+static void tok_build(Tok *t, Tensor *m, int vocab) {
+    t->n = m ? (int)m->dims[0] : 0;
+    t->pairs = m ? (int32_t *)m->raw : NULL;
+    t->vocab = vocab;
+    t->rank_key = malloc(sizeof(int32_t) * HSIZE);
+    t->rank_val = malloc(sizeof(int32_t) * HSIZE);
+    for (int i = 0; i < HSIZE; i++) t->rank_key[i] = -1;
+    for (int i = 0; i < t->n; i++) {
+        int32_t a = t->pairs[2 * i], b = t->pairs[2 * i + 1];
+        uint32_t h = hash32((uint32_t)(a * 8192 + b)) & (HSIZE - 1);
+        while (t->rank_key[h] != -1) h = (h + 1) & (HSIZE - 1);
+        t->rank_key[h] = a * 8192 + b;
+        t->rank_val[h] = i;
+    }
+    /* resolve every merge to bytes once, in order, so decode is a copy */
+    t->expand = calloc(vocab, sizeof(unsigned char *));
+    t->expand_len = calloc(vocab, sizeof(int));
+    for (int i = 0; i < t->n; i++) {
+        int32_t a = t->pairs[2 * i], b = t->pairs[2 * i + 1];
+        int la = a < 256 ? 1 : t->expand_len[a];
+        int lb = b < 256 ? 1 : t->expand_len[b];
+        unsigned char *e = malloc(la + lb);
+        if (a < 256) e[0] = (unsigned char)a; else memcpy(e, t->expand[a], la);
+        if (b < 256) e[la] = (unsigned char)b; else memcpy(e + la, t->expand[b], lb);
+        t->expand[256 + i] = e;
+        t->expand_len[256 + i] = la + lb;
+    }
+}
+
+static int tok_rank(Tok *t, int32_t a, int32_t b) {
+    if (!t->n) return -1;
+    uint32_t h = hash32((uint32_t)(a * 8192 + b)) & (HSIZE - 1);
+    while (t->rank_key[h] != -1) {
+        if (t->rank_key[h] == a * 8192 + b) return t->rank_val[h];
+        h = (h + 1) & (HSIZE - 1);
+    }
+    return -1;
+}
+
+/* encode one word (no spaces) into out; returns the count */
+static int tok_encode_word(Tok *t, const unsigned char *w, int len, int *out) {
+    int syms[256], n = len;
+    if (len > 256) return 0;
+    for (int i = 0; i < len; i++) syms[i] = w[i];
+    while (n > 1) {
+        int best = -1, bi = -1;
+        for (int i = 0; i < n - 1; i++) {
+            int r = tok_rank(t, syms[i], syms[i + 1]);
+            if (r >= 0 && (best < 0 || r < best)) { best = r; bi = i; }
+        }
+        if (best < 0) break;
+        syms[bi] = 256 + best;
+        for (int i = bi + 1; i < n - 1; i++) syms[i] = syms[i + 1];
+        n--;
+    }
+    for (int i = 0; i < n; i++) out[i] = syms[i];
+    return n;
+}
+
+/* encode a whole string: whitespace-split words, a space between them, like the trainer */
+static int tok_encode(Tok *t, const char *text, int *out) {
+    int n = 0;
+    const unsigned char *p = (const unsigned char *)text;
+    while (*p) {
+        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+        if (!*p) break;
+        const unsigned char *start = p;
+        while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') p++;
+        n += tok_encode_word(t, start, (int)(p - start), out + n);
+        out[n++] = 32;
+    }
+    if (n > 0) n--;
+    return n;
+}
+
 /* ------------------------------------------------------------------ maths */
 
 static void rmsnorm(const float *x, const float *w, float *out, int d) {
@@ -296,11 +397,24 @@ int main(int argc, char **argv) {
     const char *prompt = argc > 2 ? argv[2] : "Job postings from 185 sources";
     int max_new = argc > 3 ? atoi(argv[3]) : 60;
 
+    Tok tok;
+    memset(&tok, 0, sizeof tok);
+    {
+        uint32_t nn = 0;
+        Tensor *tt = load_tensors(argv[1], &nn);
+        tok_build(&tok, find(tt, nn, "tokenizer/merges"), (int)m.vocab);
+        free(tt);
+    }
+
     char buf[2048];
     snprintf(buf, sizeof buf, "IN: %s\nOUT: ", prompt);
     int ids[MAXTOK], n = 0;
     ids[n++] = BOS;
-    for (const char *p = buf; *p && n < MAXTOK - 1; p++) ids[n++] = (unsigned char)*p;
+    if (tok.n) {
+        n += tok_encode(&tok, buf, ids + n);
+    } else {
+        for (const char *p = buf; *p && n < MAXTOK - 1; p++) ids[n++] = (unsigned char)*p;
+    }
 
     Cache c;
     for (uint32_t l = 0; l < m.layers; l++) {
@@ -317,8 +431,13 @@ int main(int argc, char **argv) {
         int best = 0;
         for (int i = 1; i < (int)m.vocab; i++) if (logits[i] > logits[best]) best = i;
         if (best == EOS) break;
-        if (best < 256) fputc(best, stdout);
-        else printf("<%d>", best);
+        if (tok.n && best >= 256) {
+            fwrite(tok.expand[best], 1, tok.expand_len[best], stdout);
+        } else if (best < 256) {
+            fputc(best, stdout);
+        } else {
+            printf("<%d>", best);
+        }
         fflush(stdout);
         forward(&m, best, pos, &c, logits);
     }

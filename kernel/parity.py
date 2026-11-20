@@ -8,6 +8,9 @@ Both sides generate greedily and the strings are compared exactly. Run it agains
 **fp32** export: int8 weights are a different model by design, so comparing them would
 measure the quantiser, not the kernel.
 
+Works for both tokenizers. A byte-level model needs no extra data; a BPE model carries its
+merges inside the .lmk, so there is nothing else to pass.
+
 Exit code 1 on the first mismatch, with both strings printed.
 """
 

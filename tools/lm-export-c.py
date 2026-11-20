@@ -12,7 +12,7 @@ The format
     per tensor: name_len u8 | name | ndim u8 | dims u32[ndim] | dtype u8 | nbytes u32 | data
 
 dtype 0 is float32, 1 is int8 with a per-row scale stored as a float32 tensor named
-"<name>.scale". Everything is little-endian.
+"<name>.scale", 2 is int32. Everything is little-endian.
 
 Why not GGUF
 ------------
@@ -79,6 +79,15 @@ def main():
             else:
                 tensors.append((key, arr.astype("<f4"), 0))
 
+    # a BPE model carries its merges, or the kernel cannot tokenise
+    if cfg.get("tokenizer", "bytes") == "bpe":
+        bpe_path = os.path.join(a.run, "bpe.json")
+        if not os.path.exists(bpe_path):
+            sys.exit("tokenizer is bpe but %s is missing" % bpe_path)
+        spec = json.load(open(bpe_path))
+        merges = np.array(spec["merges"], dtype="<i4")
+        tensors.append(("tokenizer/merges", merges, 2))
+
     with open(a.out, "wb") as fh:
         fh.write(MAGIC)
         fh.write(struct.pack("<I", VERSION))
@@ -91,8 +100,8 @@ def main():
     print("  vocab %d  dim %d  layers %d  heads %d  ff %d  seq %d  tokenizer %s"
           % (cfg["vocab"], cfg["dim"], cfg["layers"], cfg["heads"], cfg["ff"], cfg["seq"],
              cfg.get("tokenizer", "bytes")))
-    if cfg.get("tokenizer", "bytes") != "bytes":
-        print("  note: this kernel decodes byte-level only; the BPE merges are not in the file")
+    if cfg.get("tokenizer", "bytes") == "bpe":
+        print("  merges %d embedded" % (len(tensors[-1][1]) if tensors else 0))
 
 
 if __name__ == "__main__":

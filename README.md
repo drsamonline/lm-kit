@@ -112,10 +112,22 @@ It loads the `.lmk` that `lm-export-c.py` writes, dequantises the int8 weights o
 the same forward pass the trainer ran: RMSNorm, RoPE, causal attention with a KV cache, SwiGLU,
 tied output. 47 KB of binary for a 1.08 M-parameter model.
 
-**Verified against PyTorch.** `kernel/parity.py` generates greedily on both sides and compares
-the strings; all three prompts match exactly on an fp32 export. Against the int8 export the output
-diverges after about thirteen tokens — that is the quantiser, not the kernel, which is why the
-parity test uses fp32 and says so.
+**Verified against PyTorch, for both tokenizers.** `kernel/parity.py` generates greedily on both
+sides and compares the strings; three prompts match exactly on the byte model and three on the BPE
+model, against fp32 exports. Against an int8 export the output diverges after about thirteen
+tokens — that is the quantiser, not the kernel, which is why the parity test uses fp32 and says so.
+
+The BPE merges travel inside the `.lmk`, so the kernel tokenises exactly as the trainer did —
+whitespace-split words, lowest-rank pair merged repeatedly, a space between words — with a hash
+table for the ranks and a byte expansion table built once at load.
+
+| | byte model | BPE model |
+|---|---|---|
+| throughput, 1.08 M / 1.51 M params, one core | 527 tok/s | **1,016 tok/s** |
+| binary | 56 KB | 56 KB |
+
+BPE is faster per token *and* covers more text per token: 200 tokens of it is about 3× the
+characters of 200 byte tokens.
 
 Correct before fast: the inner loop is float arithmetic on dequantised weights. Making it an
 integer dot product is the next change, and it will be benchmarked against a properly configured
