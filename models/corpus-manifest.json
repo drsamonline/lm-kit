@@ -1,0 +1,141 @@
+{
+ "generated": "2026-11-19",
+ "models": {
+  "act": {
+   "licence_skips": 0,
+   "pairs": 2626,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "TOOLWORKS": 404,
+    "app-endpoints": 2166,
+    "pico": 56
+   },
+   "splits": {
+    "eval": {
+     "bytes": 15531,
+     "pairs": 56,
+     "sha256": "8dee3c5aeb017e9a9ee72e10e88a1e2014157e793282f1b6b8853ad48bdcc4be"
+    },
+    "train": {
+     "bytes": 722869,
+     "pairs": 2570,
+     "sha256": "0c5a22af54504b8c8d869ebc7187c604ce6722089e0a5e794ec44ea6d4bfe2c1"
+    }
+   }
+  },
+  "audit": {
+   "licence_skips": 0,
+   "pairs": 19,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "forge": 16,
+    "knowledge": 3
+   },
+   "splits": {
+    "eval": {
+     "bytes": 1675,
+     "pairs": 2,
+     "sha256": "fc3d21675e83cf053a107bff0998806f3942ca6492490cc21928dd9b375d01f6"
+    },
+    "train": {
+     "bytes": 17879,
+     "pairs": 17,
+     "sha256": "09d43f7cefb2918a15eae846d13fecbc81a59b0f4bd30cf41634b17dd860b8d9"
+    }
+   }
+  },
+  "book": {
+   "licence_skips": 1,
+   "pairs": 5502,
+   "skip_examples": [
+    "homoeopathic-materia-medica-repertory-json/treatise/bach-free-thyself-1932.json"
+   ],
+   "skip_reasons": [
+    "US public domain from 2028"
+   ],
+   "sources": {
+    "corpus-extendum": 79,
+    "homoeopathic-materia-medica-repertory-json": 5423
+   },
+   "splits": {
+    "eval": {
+     "bytes": 900632,
+     "pairs": 129,
+     "sha256": "9cd74729afa1eed7ce8f61e85d2c8608421dd14e03e57a03658f5ba832ca7759"
+    },
+    "train": {
+     "bytes": 40374089,
+     "pairs": 5373,
+     "sha256": "07122f2e41828a4e3656f019352ebb2f4e6eb2b762248ccf5ba4df858c7f1e76"
+    }
+   }
+  },
+  "forge": {
+   "licence_skips": 0,
+   "pairs": 98,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "KILN": 98
+   },
+   "splits": {
+    "eval": {
+     "bytes": 3717,
+     "pairs": 9,
+     "sha256": "2704c8964c12a7c1b15e3c86be9427296180e8906f90754cea95fd0538d8bb52"
+    },
+    "train": {
+     "bytes": 44172,
+     "pairs": 89,
+     "sha256": "dc19a4396f8c85c6a23aa805bd8f687e918047babb5cfff36469381bdcff6580"
+    }
+   }
+  },
+  "materia": {
+   "licence_skips": 0,
+   "pairs": 1709,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "homoeopathic-materia-medica-repertory-json": 1709
+   },
+   "splits": {
+    "eval": {
+     "bytes": 96989,
+     "pairs": 38,
+     "sha256": "4abe31e97c42f6a95c93e5d291a7855efec680c2471270b65a6e02164307c6fa"
+    },
+    "train": {
+     "bytes": 6325734,
+     "pairs": 1671,
+     "sha256": "b268d08f2b4867064c7f2efc8b51a3789d52dafb62f13b747b646ad59b817032"
+    }
+   }
+  },
+  "rep": {
+   "licence_skips": 0,
+   "pairs": 359432,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "homoeopathic-materia-medica-repertory-json": 359432
+   },
+   "splits": {
+    "eval": {
+     "bytes": 2831955,
+     "pairs": 7145,
+     "sha256": "d7270106214a16e469d522c1163b72aa0691f33639bd7de27895d3c868dd6030"
+    },
+    "train": {
+     "bytes": 139582235,
+     "pairs": 352287,
+     "sha256": "f91b4e39cd1912f1fb11f756267be0338c5bf2cf3c610b4153ebf2402e67ee34"
+    }
+   }
+  }
+ },
+ "root": "src",
+ "schema": "lm-corpus/1"
+}

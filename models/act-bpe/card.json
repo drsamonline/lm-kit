@@ -1,0 +1,12 @@
+{
+ "model": "lm-act",
+ "corpus": "act",
+ "steps": 180,
+ "batch": 4,
+ "lr": 0.003,
+ "params": 1574016,
+ "final_train_loss": 2.9391,
+ "eval_loss": 3.2267,
+ "corpus_sha256": "e598710c8db39f5f",
+ "generated": "2026-11-19"
+}

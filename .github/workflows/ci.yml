@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: compile
+        run: python3 -m py_compile tools/*.py tests/*.py
+      - name: smoke test
+        run: python3 tests/test_tools.py
+      - name: manifest is valid json
+        run: python3 -c "import json;json.load(open('models/corpus-manifest.json'));print('ok')"
+      - name: every model card names its corpus
+        run: |
+          python3 - <<'PY'
+          import json, glob, sys
+          for p in glob.glob('models/*/card.json'):
+              c = json.load(open(p))
+              assert c.get('corpus_sha256'), p + ' has no corpus hash'
+              print(p, c['corpus'], c['params'], c.get('eval_loss'))
+          PY

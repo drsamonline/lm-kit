@@ -1,0 +1,10 @@
+{
+ "vocab": 4096,
+ "tokenizer": "bpe",
+ "dim": 128,
+ "layers": 4,
+ "heads": 4,
+ "ff": 512,
+ "seq": 256,
+ "params": 1574016
+}
