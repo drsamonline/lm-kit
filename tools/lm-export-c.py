@@ -79,6 +79,11 @@ def main():
             else:
                 tensors.append((key, arr.astype("<f4"), 0))
 
+    # the shape travels with the weights: the kernel must not guess heads or context
+    shape = np.array([cfg["vocab"], cfg["dim"], cfg["layers"], cfg["heads"], cfg["ff"], cfg["seq"]],
+                     dtype="<i4")
+    tensors.append(("config/shape", shape, 2))
+
     # a BPE model carries its merges, or the kernel cannot tokenise
     if cfg.get("tokenizer", "bytes") == "bpe":
         bpe_path = os.path.join(a.run, "bpe.json")

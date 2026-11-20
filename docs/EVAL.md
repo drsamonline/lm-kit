@@ -1,6 +1,8 @@
 # Evaluation — the first honest numbers
 
-Two checkpoints, same corpus (`act`, 56 held-out pairs), 20 sampled for speed, greedy decoding.
+Two checkpoints, same corpus (`act`, 56 held-out pairs), **20 sampled for speed** — the tool defaults
+to `--limit 60` and the report never said so. Twenty of fifty-six is a small sample: treat the
+figures as an indication, not a confidence interval. Greedy decoding.
 The metric is on the **output**, not the loss: does it parse, does it match, which fields survive.
 
 | Metric | byte-level | BPE 4,096 |

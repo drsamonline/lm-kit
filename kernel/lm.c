@@ -150,9 +150,19 @@ static void load_model(Model *m, const char *path) {
     if (layers == 0 || layers > MAXLAYERS) { fprintf(stderr, "bad layer count\n"); exit(1); }
 
     /* heads: from the exported config, which is not in the file — derive from dim/32 */
-    m->heads = 4;
-    m->ff = 4 * m->dim;
-    m->seq = 256;
+    /* the shape travels in the file; guessing it silently miscomputes */
+    Tensor *shape = find(t, n, "config/shape");
+    if (!shape || shape->nbytes < 24) {
+        fprintf(stderr, "no config/shape in %s — re-export with a current lm-export-c.py\n", path);
+        exit(1);
+    }
+    const int32_t *sh = (const int32_t *)shape->raw;
+    m->vocab  = sh[0];
+    m->dim    = sh[1];
+    m->layers = sh[2];
+    m->heads  = sh[3];
+    m->ff     = sh[4];
+    m->seq    = sh[5];
 
     char name[64];
     snprintf(name, sizeof name, "blocks/0/w1/weight");
@@ -331,6 +341,10 @@ typedef struct {
 
 static void forward(Model *m, int token, int pos, Cache *c, float *logits) {
     int d = m->dim, nh = m->heads, dh = d / nh;
+    if (pos < 0 || (uint32_t)pos >= m->seq) {
+        fprintf(stderr, "context full at %d (seq %u)\n", pos, m->seq);
+        exit(3);
+    }
     static float x[MAXD], n1[MAXD], n2[MAXD], qkv[3 * MAXD], att[MAXD], h1[MAXFF], h3[MAXFF], hm[MAXFF];
     static float scores[MAXD];
 
@@ -411,7 +425,13 @@ int main(int argc, char **argv) {
     int ids[MAXTOK], n = 0;
     ids[n++] = BOS;
     if (tok.n) {
-        n += tok_encode(&tok, buf, ids + n);
+        int room = MAXTOK - 1 - n;
+        int got = tok_encode(&tok, buf, ids + n);
+        if (got > room) {
+            fprintf(stderr, "prompt too long: %d tokens, %d room\n", got, room);
+            return 3;
+        }
+        n += got;
     } else {
         for (const char *p = buf; *p && n < MAXTOK - 1; p++) ids[n++] = (unsigned char)*p;
     }
@@ -428,6 +448,10 @@ int main(int argc, char **argv) {
 
     fputc('\n', stdout);
     for (int g = 0; g < max_new; g++, pos++) {
+        if ((uint32_t)pos >= m.seq) {
+            fprintf(stderr, "\n[stopped at the %u-token context]\n", m.seq);
+            break;
+        }
         int best = 0;
         for (int i = 1; i < (int)m.vocab; i++) if (logits[i] > logits[best]) best = i;
         if (best == EOS) break;

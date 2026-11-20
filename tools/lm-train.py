@@ -340,7 +340,9 @@ def corpus_hash(corpus, model):
     for split in ("train", "eval"):
         p = os.path.join(corpus, "%s.%s.jsonl" % (model, split))
         if os.path.exists(p):
-            h.update(open(p, "rb").read())
+            with open(p, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
     return h.hexdigest()[:16]
 
 
