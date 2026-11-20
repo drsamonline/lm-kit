@@ -364,7 +364,7 @@ def train(args):
         model.eval()
         with torch.no_grad():
             tot, den = 0.0, 0.0
-            for i in range(0, nev, args.batch):
+            for i in range(0, min(nev, args.eval_limit), args.batch):
                 idx = np.arange(i, min(i + args.batch, nev))
                 ex, ey, em = batch(eids, emask, args.seq, idx)
                 lg = model(ex)
@@ -443,6 +443,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus")
     ap.add_argument("--model", default="act")
+    ap.add_argument("--eval-limit", type=int, default=200,
+                    help="blocks of the eval split to score; the repertory split is 6,211")
     ap.add_argument("--seed", type=int, default=0,
                     help="seed for batch order; vary it to see how much of a result is noise")
     ap.add_argument("--lora", type=int, default=0,

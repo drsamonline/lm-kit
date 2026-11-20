@@ -116,6 +116,21 @@ with tempfile.TemporaryDirectory() as tmp:
     check("carries the rationale", any(q["output"].get("rationale") == "Because." for q in pairs))
     check("reads the glossary", any(q["input"] == "Pedagogy" for q in pairs))
 
+print("task scorers (skipped without torch)")
+try:
+    import torch  # noqa: F401
+    ev = load("lm_eval", os.path.join(HERE, "..", "tools", "lm-eval.py"))
+    with tempfile.TemporaryDirectory() as tmp:
+        p = os.path.join(tmp, "x.train.jsonl")
+        with open(p, "w") as fh:
+            fh.write(json.dumps({"input": "a", "output": {"rubric_id": "r1"}}) + "\n")
+            fh.write(json.dumps({"input": "b", "output": {"book": "x"}}) + "\n")
+        idx = ev.rubric_index(p)
+        check("rubric index picks up ids", idx == {"r1"}, str(idx))
+    check("a missing file gives an empty index", ev.rubric_index("/nope") == set())
+except ImportError:
+    print("  skip  torch is not installed here")
+
 print()
 if FAILED:
     print("%d failed: %s" % (len(FAILED), ", ".join(FAILED)))

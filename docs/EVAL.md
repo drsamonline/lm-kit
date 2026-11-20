@@ -107,6 +107,23 @@ applies it at load:
 A 1.1 MB int8 base plus a 338 KB adapter produces output byte-identical to the PyTorch LoRA model.
 The adapter is fp32 here; stored the way the weights are it is 86 KB.
 
+## Task-specific scoring
+
+A JSON that parses is not an answer. `lm-eval.py --task rep` scores the thing the repertory model
+is for:
+
+| Metric | What it asks |
+|---|---|
+| `id_exact` | the rubric id the model returned is the one the held-out pair expected |
+| `id_resolvable` | that id exists in the index the application will look it up in — 315,240 ids, from the training split |
+
+`id_resolvable` is the safety metric. A model that invents a plausible-looking id scores zero on it,
+which is the outcome the design wants: the kit discards what it cannot resolve rather than showing
+the user a fabricated rubric.
+
+The first run, on a model trained 30 steps on 20,000 pairs, scores zero on both and emits
+`"adddddd…"`. That is the honest floor: the harness measures, the model does not yet answer.
+
 ## Structured pruning
 
 `lm-prune.py` removes whole feed-forward channels — rows from w1 and w3, the matching columns from

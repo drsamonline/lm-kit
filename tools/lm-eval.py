@@ -124,6 +124,23 @@ def field_score(expected, got):
     return hits / len(keys)
 
 
+def rubric_index(path):
+    """Every rubric id the training split mentions — what a returned id has to resolve against."""
+    ids = set()
+    if not os.path.exists(path):
+        return ids
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            try:
+                out = json.loads(line).get("output") or {}
+            except ValueError:
+                continue
+            rid = out.get("rubric_id")
+            if rid:
+                ids.add(rid)
+    return ids
+
+
 def bootstrap(values, resamples, alpha=0.05):
     """Percentile bootstrap. Returns (lo, hi) for the mean."""
     if not values:
@@ -144,6 +161,8 @@ def main():
     ap.add_argument("--boot", type=int, default=2000, help="bootstrap resamples")
     ap.add_argument("--gate", action="append", default=[],
                     help="metric=threshold, repeatable, e.g. json_valid=0.9")
+    ap.add_argument("--task", default="",
+                    help="a task-specific scorer: rep checks the rubric id, and whether it resolves")
     ap.add_argument("--out", default=None, help="write the result json here")
     a = ap.parse_args()
 
@@ -181,9 +200,24 @@ def main():
         f = field_score(r["output"], got) if ok_json else 0.0
         fields.append(f)
         exact += (f == 1.0)
+        r["_got"] = got
         if len(examples) < 5:
             examples.append({"input": r["input"][:80], "expected": r["output"],
                              "got": text[:120], "field_score": round(f, 3)})
+
+    # task-specific scoring, on the same generated text
+    task_result = {}
+    if a.task == "rep":
+        index = rubric_index(os.path.join(a.corpus, "%s.train.jsonl" % a.model))
+        hits = resolved = 0
+        for r in rows:
+            want = (r.get("output") or {}).get("rubric_id")
+            got = (r.get("_got") or {}).get("rubric_id") if r.get("_got") else None
+            hits += (want is not None and got == want)
+            resolved += (got in index) if got else 0
+        task_result = {"id_exact": round(hits / max(len(rows), 1), 4),
+                       "id_resolvable": round(resolved / max(len(rows), 1), 4),
+                       "index_size": len(index)}
 
     n = max(len(rows), 1)
     total = sum(1 for _ in open(path, encoding="utf-8"))
@@ -202,6 +236,12 @@ def main():
     print("  json_valid   %.3f   95%% CI %.3f-%.3f" % (result["json_valid"], lo, hi))
     print("  exact        %.3f" % result["exact"])
     print("  field_match  %.3f   95%% CI %.3f-%.3f" % (result["field_match"], flo, fhi))
+    if task_result:
+        result.update(task_result)
+        print("  id_exact     %.3f   the rubric id the model returned was the right one"
+              % task_result["id_exact"])
+        print("  id_resolvable %.3f  and it exists in an index of %d"
+              % (task_result["id_resolvable"], task_result["index_size"]))
     if len(rows) < total:
         print("  note: a sample, not the split — run without --limit before quoting it")
     print("  examples")

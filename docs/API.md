@@ -89,6 +89,7 @@ lm-train — train one small model from a harvested corpus.
 |---|---|---|
 | `--corpus` | flag |  |
 | `--model` | default `"act"` |  |
+| `--eval-limit` | `int` default `200` | blocks of the eval split to score; the repertory split is 6,211 |
 | `--seed` | `int` default `0` | seed for batch order; vary it to see how much of a result is noise |
 | `--lora` | `int` default `0` | train low-rank adapters of this rank instead of the whole model |
 | `--resume` | store_true | continue from model.pt already in --out, instead of starting fresh |
@@ -137,6 +138,7 @@ lm-eval — score a checkpoint against its held-out split, and fail when it is n
 | `--limit` | `int` default `0` | 0 = every held-out pair |
 | `--boot` | `int` default `2000` | bootstrap resamples |
 | `--gate` | append default `[]` | metric=threshold, repeatable, e.g. json_valid=0.9 |
+| `--task` | default `""` | a task-specific scorer: rep checks the rubric id, and whether it resolves |
 | `--out` | default `None` | write the result json here |
 
 | function | arguments | returns |
@@ -145,6 +147,7 @@ lm-eval — score a checkpoint against its held-out split, and fail when it is n
 | `generate_one` | `model, tok, prompt, seq, max_new=96` | Greedy, stopping when the JSON object closes. |
 | `parse_json` | `text` | Take the first balanced {...} and parse it, or return None. |
 | `field_score` | `expected, got` |  |
+| `rubric_index` | `path` | Every rubric id the training split mentions — what a returned id has to resolve against. |
 | `bootstrap` | `values, resamples, alpha=0.05` | Percentile bootstrap. Returns (lo, hi) for the mean. |
 | `main` | `` |  |
 

@@ -2,6 +2,15 @@
 
 Newest first. Every entry says what changed and what it cost.
 
+## 0.6.0 — 20 November 2026
+
+**The evaluator scores tasks, not just JSON.** `lm-eval.py --task rep` adds `id_exact` (was the
+rubric id right) and `id_resolvable` (does that id exist in the index the app will search — 315,240
+of them). `id_resolvable` is the safety metric: a fabricated id scores zero.
+
+Also: `lm-train.py --eval-limit`, because the repertory eval split is 6,211 blocks and scoring all
+of it turned a 30-step training run into a ten-minute one.
+
 ## 0.5.0 — 20 November 2026
 
 **Pruning works where quantisation did not.** `lm-prune.py` removes whole feed-forward channels and
