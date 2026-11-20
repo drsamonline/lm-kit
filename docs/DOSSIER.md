@@ -162,7 +162,7 @@ emits an ID, the kit resolves it, and an ID that is not in the index is discarde
 
 | Technique | Realistic gain | Where it applies |
 |---|---|---|
-| Structured pruning + retrain | **36% measured** | 690,304 params from 1,083,520, eval 1.3253 against 1.3024 — the largest verified win |
+| Structured pruning + retrain | **36% measured** | 690,304 params from 1,083,520. Three seeds: +2.3% eval, t = 1.17 — real, but inside seed noise |
 | Low-rank factorisation of MLPs | 10–25% | small quality cost |
 | Vocabulary pruning | up to 45% | only on an inherited base |
 | Entropy coding | 3–8% | the final archive |

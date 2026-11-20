@@ -89,6 +89,7 @@ lm-train — train one small model from a harvested corpus.
 |---|---|---|
 | `--corpus` | flag |  |
 | `--model` | default `"act"` |  |
+| `--seed` | `int` default `0` | seed for batch order; vary it to see how much of a result is noise |
 | `--lora` | `int` default `0` | train low-rank adapters of this rank instead of the whole model |
 | `--resume` | store_true | continue from model.pt already in --out, instead of starting fresh |
 | `--out` | flag |  |

@@ -119,10 +119,24 @@ comparison is at equal steps.
 | pruned 75% | 886,912 | 384 | 1.3551 | −18.1% |
 | pruned 50% | 690,304 | 256 | **1.3253** | −36.3% |
 
-Half the feed-forward channels can go for about 2% of the eval loss. The 50% run beats the 75% run,
-which is almost certainly noise — one seed, one split, forty steps of recovery — but the direction
-is not in doubt: **the feed-forward is heavily over-parameterised at this size, and pruning works
-where 4-bit quantisation did not.**
+One seed is not a measurement, so it was repeated three times:
+
+| Condition | Seeds | Mean | SD |
+|---|---|---|---|
+| unpruned | 1.3024, 1.2975, 1.3204 | 1.3068 | 0.0121 |
+| pruned 50% | 1.3253, 1.3009, 1.3834 | 1.3365 | 0.0424 |
+
+The difference is **+0.0298 (+2.3%), SE 0.0254, t = 1.17** — not distinguishable from seed noise at
+three seeds. What the experiment supports is narrower than the first run suggested and stronger than
+"unknown":
+
+- pruning 36% of the parameters does not stop the model training, and the loss is at worst a few
+  percent worse;
+- the pruned model's spread is three times wider (SD 0.042 against 0.012), so it is less reliable
+  run to run even where its mean is close.
+
+**The feed-forward is over-parameterised at this size, and pruning works where 4-bit quantisation
+did not.** To turn 36% into a shipping number needs more seeds, not a different method.
 
 That contrast is worth stating plainly. Q4 removed 50% of the bits and destroyed the model. Pruning
 removed 36% of the parameters and cost 2% of the loss. The difference is that pruning removes whole

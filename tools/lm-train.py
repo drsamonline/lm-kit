@@ -443,6 +443,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus")
     ap.add_argument("--model", default="act")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="seed for batch order; vary it to see how much of a result is noise")
     ap.add_argument("--lora", type=int, default=0,
                     help="train low-rank adapters of this rank instead of the whole model")
     ap.add_argument("--resume", action="store_true",
