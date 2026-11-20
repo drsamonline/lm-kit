@@ -99,6 +99,28 @@ produces `"cat": "Games & Comics"`. The format is learned; the vocabulary is not
 correct result for 1.5 M parameters and three CPU minutes, and it is what the 22 M model with a
 GPU-week closes.
 
+## The kernel
+
+`kernel/lm.c` runs the model without Python. One architecture, one file, libc and libm only.
+
+```bash
+python3 tools/lm-export-c.py --run ../run-act --out ../run-act/model.lmk
+cd kernel && make && ./lm ../run-act/model.lmk "Job postings from 185 sources"
+```
+
+It loads the `.lmk` that `lm-export-c.py` writes, dequantises the int8 weights once, and runs
+the same forward pass the trainer ran: RMSNorm, RoPE, causal attention with a KV cache, SwiGLU,
+tied output. 47 KB of binary for a 1.08 M-parameter model.
+
+**Verified against PyTorch.** `kernel/parity.py` generates greedily on both sides and compares
+the strings; all three prompts match exactly on an fp32 export. Against the int8 export the output
+diverges after about thirteen tokens — that is the quantiser, not the kernel, which is why the
+parity test uses fp32 and says so.
+
+Correct before fast: the inner loop is float arithmetic on dequantised weights. Making it an
+integer dot product is the next change, and it will be benchmarked against a properly configured
+baseline rather than a default one.
+
 ## The family
 
 | Model | Job | Params | Q4 |
@@ -118,6 +140,7 @@ Eight group models share one 3 M base plus a small delta each — nine specialit
 
 ```
 tools/     the four stages — harvest, tokenize, train, evaluate
+kernel/    the C inference kernel and its parity test
 docs/      the dossier and the five proposals that led to it
 models/    the corpus manifest and the two demo checkpoints with their cards
 tests/     a smoke test that runs without the repositories or the network

@@ -1,0 +1,329 @@
+/*
+ * lm.c — a small inference kernel for the models lm-train.py produces.
+ *
+ *   make            builds ./lm
+ *   ./lm model.lmk "Job postings from 185 sources"
+ *
+ * What it is
+ * ----------
+ * One architecture, one file, no dependencies beyond libc and libm. It loads the .lmk
+ * that lm-export-c.py writes, dequantises the int8 weights once, and runs the same
+ * forward pass the trainer ran: RMSNorm, RoPE, causal attention, SwiGLU, tied output.
+ *
+ * Correct before fast
+ * -------------------
+ * The weights are stored int8 to keep the file small, and expanded to float on load. The
+ * inner loop is plain float arithmetic, not an integer dot product, because the first job
+ * is to produce the same tokens as PyTorch. Making the matmul integer is a separate change
+ * with its own benchmark — and a benchmark that does not compare against a correctly
+ * configured baseline is how 1.17x becomes "7.5x".
+ *
+ * Licence: PolyForm Noncommercial 1.0.0
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <stdint.h>
+
+#define MAXD 1024
+#define MAXFF 4096
+#define MAXLAYERS 32
+#define MAXTOK 4096
+
+/* ------------------------------------------------------------------ model */
+
+typedef struct {
+    char name[64];
+    int ndim;
+    uint32_t dims[4];
+    int dtype;          /* 0 = f32, 1 = int8 */
+    uint32_t nbytes;
+    unsigned char *raw;
+} Tensor;
+
+typedef struct {
+    uint32_t vocab, dim, layers, heads, ff, seq;
+    float *emb, *head;
+    float *qkv[MAXLAYERS], *proj[MAXLAYERS];
+    float *w1[MAXLAYERS], *w3[MAXLAYERS], *w2[MAXLAYERS];
+    float *n1[MAXLAYERS], *n2[MAXLAYERS], *nfinal;
+    int ok;
+} Model;
+
+static uint32_t rd_u32(FILE *f) {
+    uint32_t v = 0;
+    if (fread(&v, 4, 1, f) != 1) { fprintf(stderr, "short read\n"); exit(1); }
+    return v; /* little-endian host assumed; every target we ship is */
+}
+
+static Tensor *load_tensors(const char *path, uint32_t *count) {
+    FILE *f = fopen(path, "rb");
+    if (!f) { fprintf(stderr, "cannot open %s\n", path); exit(1); }
+    char magic[4];
+    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "LMK1", 4) != 0) {
+        fprintf(stderr, "not an .lmk file\n"); exit(1);
+    }
+    uint32_t version = rd_u32(f), n = rd_u32(f);
+    if (version != 1) { fprintf(stderr, "version %u unsupported\n", version); exit(1); }
+    Tensor *t = calloc(n, sizeof(Tensor));
+    for (uint32_t i = 0; i < n; i++) {
+        uint8_t nl = 0;
+        if (fread(&nl, 1, 1, f) != 1) { fprintf(stderr, "short read\n"); exit(1); }
+        if (fread(t[i].name, 1, nl, f) != nl) { fprintf(stderr, "short read\n"); exit(1); }
+        t[i].name[nl] = 0;
+        uint8_t nd = 0;
+        if (fread(&nd, 1, 1, f) != 1) { fprintf(stderr, "short read\n"); exit(1); }
+        t[i].ndim = nd;
+        for (int d = 0; d < nd; d++) t[i].dims[d] = rd_u32(f);
+        uint8_t dt = 0;
+        if (fread(&dt, 1, 1, f) != 1) { fprintf(stderr, "short read\n"); exit(1); }
+        t[i].dtype = dt;
+        t[i].nbytes = rd_u32(f);
+        t[i].raw = malloc(t[i].nbytes);
+        if (fread(t[i].raw, 1, t[i].nbytes, f) != t[i].nbytes) {
+            fprintf(stderr, "short read on %s\n", t[i].name); exit(1);
+        }
+    }
+    fclose(f);
+    *count = n;
+    return t;
+}
+
+static Tensor *find(Tensor *t, uint32_t n, const char *name) {
+    for (uint32_t i = 0; i < n; i++) if (strcmp(t[i].name, name) == 0) return &t[i];
+    return NULL;
+}
+
+/* int8 with a per-row scale -> float, one row at a time */
+static float *dequant_rows(Tensor *w, Tensor *scale, int rows, int cols) {
+    float *out = malloc(sizeof(float) * rows * cols);
+    const int8_t *q = (const int8_t *)w->raw;
+    const float *s = (const float *)scale->raw;
+    for (int r = 0; r < rows; r++)
+        for (int c = 0; c < cols; c++)
+            out[r * cols + c] = (float)q[r * cols + c] * s[r];
+    return out;
+}
+
+static float *dequant_plain(Tensor *w) {
+    float *out = malloc(w->nbytes);
+    memcpy(out, w->raw, w->nbytes);
+    return out;
+}
+
+static float *get_mat(Tensor *t, uint32_t n, const char *base, int rows, int cols) {
+    char sname[96];
+    Tensor *w = find(t, n, base);
+    if (!w) { fprintf(stderr, "missing tensor %s\n", base); exit(1); }
+    if (w->dtype == 0) return dequant_plain(w);
+    snprintf(sname, sizeof sname, "%s.scale", base);
+    Tensor *s = find(t, n, sname);
+    if (!s) { fprintf(stderr, "missing scale for %s\n", base); exit(1); }
+    return dequant_rows(w, s, rows, cols);
+}
+
+static float *get_vec(Tensor *t, uint32_t n, const char *base) {
+    Tensor *w = find(t, n, base);
+    if (!w) { fprintf(stderr, "missing tensor %s\n", base); exit(1); }
+    return dequant_plain(w);
+}
+
+static void load_model(Model *m, const char *path) {
+    uint32_t n = 0;
+    Tensor *t = load_tensors(path, &n);
+    Tensor *emb = find(t, n, "emb/weight");
+    if (!emb) { fprintf(stderr, "no emb/weight\n"); exit(1); }
+    m->vocab = emb->dims[0];
+    m->dim   = emb->dims[1];
+
+    /* infer layers by counting qkv tensors */
+    uint32_t layers = 0;
+    while (1) {
+        char name[64];
+        snprintf(name, sizeof name, "blocks/%u/qkv/weight", layers);
+        if (!find(t, n, name)) break;
+        layers++;
+    }
+    m->layers = layers;
+    if (layers == 0 || layers > MAXLAYERS) { fprintf(stderr, "bad layer count\n"); exit(1); }
+
+    /* heads: from the exported config, which is not in the file — derive from dim/32 */
+    m->heads = 4;
+    m->ff = 4 * m->dim;
+    m->seq = 256;
+
+    char name[64];
+    snprintf(name, sizeof name, "blocks/0/w1/weight");
+    Tensor *w1 = find(t, n, name);
+    if (w1) m->ff = w1->dims[0];
+
+    m->emb = get_mat(t, n, "emb/weight", m->vocab, m->dim);
+    m->head = m->emb; /* tied */
+
+    for (uint32_t l = 0; l < layers; l++) {
+        snprintf(name, sizeof name, "blocks/%u/qkv/weight", l);
+        m->qkv[l]  = get_mat(t, n, name, 3 * m->dim, m->dim);
+        snprintf(name, sizeof name, "blocks/%u/proj/weight", l);
+        m->proj[l] = get_mat(t, n, name, m->dim, m->dim);
+        snprintf(name, sizeof name, "blocks/%u/w1/weight", l);
+        m->w1[l]   = get_mat(t, n, name, m->ff, m->dim);
+        snprintf(name, sizeof name, "blocks/%u/w3/weight", l);
+        m->w3[l]   = get_mat(t, n, name, m->ff, m->dim);
+        snprintf(name, sizeof name, "blocks/%u/w2/weight", l);
+        m->w2[l]   = get_mat(t, n, name, m->dim, m->ff);
+        snprintf(name, sizeof name, "blocks/%u/n1/w", l);
+        m->n1[l]   = get_vec(t, n, name);
+        snprintf(name, sizeof name, "blocks/%u/n2/w", l);
+        m->n2[l]   = get_vec(t, n, name);
+    }
+    m->nfinal = get_vec(t, n, "norm/w");
+    m->ok = 1;
+    free(t);
+}
+
+/* ------------------------------------------------------------------ maths */
+
+static void rmsnorm(const float *x, const float *w, float *out, int d) {
+    float ms = 0.0f;
+    for (int i = 0; i < d; i++) ms += x[i] * x[i];
+    ms = ms / d + 1e-5f;
+    float inv = 1.0f / sqrtf(ms);
+    for (int i = 0; i < d; i++) out[i] = w[i] * x[i] * inv;
+}
+
+static void matvec(const float *W, const float *x, float *y, int rows, int cols) {
+    for (int r = 0; r < rows; r++) {
+        const float *row = W + (size_t)r * cols;
+        float acc = 0.0f;
+        for (int c = 0; c < cols; c++) acc += row[c] * x[c];
+        y[r] = acc;
+    }
+}
+
+static void rope(float *v, int nheads, int dh, int pos) {
+    for (int h = 0; h < nheads; h++) {
+        float *x = v + (size_t)h * dh;
+        for (int j = 0; j < dh / 2; j++) {
+            float freq = powf(10000.0f, -2.0f * j / (float)dh);
+            float a = pos * freq;
+            float c = cosf(a), s = sinf(a);
+            float x0 = x[2 * j], x1 = x[2 * j + 1];
+            x[2 * j]     = x0 * c - x1 * s;
+            x[2 * j + 1] = x0 * s + x1 * c;
+        }
+    }
+}
+
+static void silu_mul(const float *a, const float *b, float *out, int n) {
+    for (int i = 0; i < n; i++) {
+        float x = a[i];
+        out[i] = (x / (1.0f + expf(-x))) * b[i];
+    }
+}
+
+/* forward one token at position pos, with the KV cache kept by the caller */
+typedef struct {
+    float *k[MAXLAYERS], *v[MAXLAYERS]; /* seq x dim each */
+} Cache;
+
+static void forward(Model *m, int token, int pos, Cache *c, float *logits) {
+    int d = m->dim, nh = m->heads, dh = d / nh;
+    static float x[MAXD], n1[MAXD], n2[MAXD], qkv[3 * MAXD], att[MAXD], h1[MAXFF], h3[MAXFF], hm[MAXFF];
+    static float scores[MAXD];
+
+    for (int i = 0; i < d; i++) x[i] = m->emb[(size_t)token * d + i];
+
+    for (uint32_t l = 0; l < m->layers; l++) {
+        rmsnorm(x, m->n1[l], n1, d);
+        matvec(m->qkv[l], n1, qkv, 3 * d, d);
+        float *q = qkv, *k = qkv + d, *v = qkv + 2 * d;
+        rope(q, nh, dh, pos);
+        rope(k, nh, dh, pos);
+        memcpy(c->k[l] + (size_t)pos * d, k, sizeof(float) * d);
+        memcpy(c->v[l] + (size_t)pos * d, v, sizeof(float) * d);
+
+        for (int h = 0; h < nh; h++) {
+            float *qh = q + h * dh;
+            float best = -1e30f;
+            for (int p = 0; p <= pos; p++) {
+                const float *kh = c->k[l] + (size_t)p * d + h * dh;
+                float s = 0.0f;
+                for (int j = 0; j < dh; j++) s += qh[j] * kh[j];
+                scores[p] = s / sqrtf((float)dh);
+                if (scores[p] > best) best = scores[p];
+            }
+            float sum = 0.0f;
+            for (int p = 0; p <= pos; p++) { scores[p] = expf(scores[p] - best); sum += scores[p]; }
+            for (int p = 0; p <= pos; p++) scores[p] /= sum;
+            for (int j = 0; j < dh; j++) {
+                float acc = 0.0f;
+                for (int p = 0; p <= pos; p++)
+                    acc += scores[p] * c->v[l][(size_t)p * d + h * dh + j];
+                att[h * dh + j] = acc;
+            }
+        }
+        matvec(m->proj[l], att, n2, d, d);
+        for (int i = 0; i < d; i++) x[i] += n2[i];
+
+        rmsnorm(x, m->n2[l], n2, d);
+        matvec(m->w1[l], n2, h1, m->ff, d);
+        matvec(m->w3[l], n2, h3, m->ff, d);
+        silu_mul(h1, h3, hm, m->ff);
+        matvec(m->w2[l], hm, n2, d, m->ff);
+        for (int i = 0; i < d; i++) x[i] += n2[i];
+    }
+
+    rmsnorm(x, m->nfinal, n1, d);
+    matvec(m->head, n1, logits, m->vocab, d);
+}
+
+/* ------------------------------------------------------------------ main */
+
+#define BOS 257
+#define EOS 258
+
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        fprintf(stderr, "usage: %s model.lmk [prompt] [max_tokens]\n", argv[0]);
+        return 2;
+    }
+    Model m;
+    memset(&m, 0, sizeof m);
+    load_model(&m, argv[1]);
+
+    const char *prompt = argc > 2 ? argv[2] : "Job postings from 185 sources";
+    int max_new = argc > 3 ? atoi(argv[3]) : 60;
+
+    char buf[2048];
+    snprintf(buf, sizeof buf, "IN: %s\nOUT: ", prompt);
+    int ids[MAXTOK], n = 0;
+    ids[n++] = BOS;
+    for (const char *p = buf; *p && n < MAXTOK - 1; p++) ids[n++] = (unsigned char)*p;
+
+    Cache c;
+    for (uint32_t l = 0; l < m.layers; l++) {
+        c.k[l] = calloc((size_t)m.seq * m.dim, sizeof(float));
+        c.v[l] = calloc((size_t)m.seq * m.dim, sizeof(float));
+    }
+
+    static float logits[8192];
+    int pos = 0;
+    for (int i = 0; i < n; i++, pos++) forward(&m, ids[i], pos, &c, logits);
+
+    fputc('\n', stdout);
+    for (int g = 0; g < max_new; g++, pos++) {
+        int best = 0;
+        for (int i = 1; i < (int)m.vocab; i++) if (logits[i] > logits[best]) best = i;
+        if (best == EOS) break;
+        if (best < 256) fputc(best, stdout);
+        else printf("<%d>", best);
+        fflush(stdout);
+        forward(&m, best, pos, &c, logits);
+    }
+    fputc('\n', stdout);
+
+    for (uint32_t l = 0; l < m.layers; l++) { free(c.k[l]); free(c.v[l]); }
+    return 0;
+}

@@ -4,3 +4,5 @@ corpus/
 run*/
 *.pt
 .DS_Store
+kernel/lm
+*.lmk
