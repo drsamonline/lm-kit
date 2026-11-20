@@ -144,7 +144,7 @@ lm-eval — score a checkpoint against its held-out split, and fail when it is n
 | function | arguments | returns |
 |---|---|---|
 | `load` | `name, path` |  |
-| `generate_one` | `model, tok, prompt, seq, max_new=96` | Greedy, stopping when the JSON object closes. |
+| `generate_one` | `model, tok, prompt, seq, max_new=192` |  |
 | `parse_json` | `text` | Take the first balanced {...} and parse it, or return None. |
 | `field_score` | `expected, got` |  |
 | `rubric_index` | `path` | Every rubric id the training split mentions — what a returned id has to resolve against. |
