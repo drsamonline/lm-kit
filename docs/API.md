@@ -12,6 +12,7 @@ runs `gen-api.py --check` and fails when the two disagree.
 | [`lm-eval.py`](../tools/lm-eval.py) | lm-eval — score a checkpoint against its held-out split, and fail when it is not good enough. |
 | [`lm-export-c.py`](../tools/lm-export-c.py) | lm-export-c — turn a trained checkpoint into one portable file the C kernel can load. |
 | [`corpus-drift.py`](../tools/corpus-drift.py) | corpus-drift — has the corpus moved since the last published manifest? |
+| [`lm-rebuild.py`](../tools/lm-rebuild.py) | lm-rebuild — close the loop: drift in, gated checkpoint out. |
 | [`gen-api.py`](../tools/gen-api.py) | gen-api — write docs/API.md from the source, so the reference cannot describe a flag that is gone. |
 
 Usage, worked examples and the measured numbers are in the [README](../README.md).
@@ -177,6 +178,33 @@ corpus-drift — has the corpus moved since the last published manifest?
 |---|---|---|
 | `sha` | `path` |  |
 | `hashes` | `corpus, models` |  |
+| `main` | `` |  |
+
+
+---
+
+## `lm-rebuild.py`
+
+lm-rebuild — close the loop: drift in, gated checkpoint out.
+
+| option | takes | what it does |
+|---|---|---|
+| `--root` | flag | source checkouts, to re-harvest first |
+| `--corpus` | required |  |
+| `--runs` | default `os.path.join(ROOT` |  |
+| `--models` | default `""` |  |
+| `--gate` | append default `[]` |  |
+| `--steps` | `int` default `60` |  |
+| `--batch` | `int` default `4` |  |
+| `--eval-limit` | `int` default `12` |  |
+| `--dry-run` | store_true |  |
+| `--report` | default `""` |  |
+
+| function | arguments | returns |
+|---|---|---|
+| `run` | `cmd, **kw` |  |
+| `drifted_models` | `corpus, models` |  |
+| `rebuild_one` | `model, corpus, runs, steps, batch, gate, eval_limit` | Train, evaluate, publish only on a pass. Returns (status, detail). |
 | `main` | `` |  |
 
 

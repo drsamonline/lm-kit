@@ -2,6 +2,19 @@
 
 Newest first. Every entry says what changed and what it cost.
 
+## 0.3.0 — 20 November 2026
+
+**The update loop closes.** `tools/corpus-drift.py` says whether the corpus has moved;
+`tools/lm-rebuild.py` retrains a drifted model and publishes it **only if it passes its gate**.
+
+- `lm-rebuild.py` — drift in, gated checkpoint out. A failed gate keeps the previous checkpoint and
+  says why, so a model that got worse cannot ship because a script ran.
+- `corpus-drift.py` — re-harvests and compares each model's SHA-256 against the published manifest.
+- `.github/workflows/corpus.yml` — weekly and on demand; warns and stops without `CORPUS_TOKEN`
+  rather than failing on a missing directory. The rebuild step is opt-in.
+- Two argparse traps fixed on the way: `--gate` accumulated its default, so the stricter threshold
+  silently won, and `tempfile` defaulted to `/tmp` with a 134 MB corpus.
+
 ## 0.2.0 — 20 November 2026
 
 **The kernel runs without Python, and the numbers are honest.**

@@ -9,6 +9,14 @@ name: corpus
 
 on:
   workflow_dispatch:
+    inputs:
+      rebuild:
+        description: "Retrain the drifted models (needs a runner with PyTorch)"
+        type: boolean
+        default: false
+      gate:
+        description: "Gate to hold the rebuild to"
+        default: "json_valid=0.30"
   schedule:
     - cron: "0 3 * * 1"   # Mondays, 03:00 UTC
 
@@ -52,3 +60,25 @@ jobs:
         if: steps.token.outputs.ok == 'true'
         working-directory: lm-kit
         run: python3 tools/corpus-drift.py --root ../src --models act,book,materia,forge,audit,file
+
+      # The loop, when asked for. A CPU runner can retrain the demo-sized models; the
+      # production sizes need a GPU runner, which is why this is opt-in rather than the
+      # default path.
+      - name: install torch
+        if: steps.token.outputs.ok == 'true' && inputs.rebuild
+        run: pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: rebuild
+        if: steps.token.outputs.ok == 'true' && inputs.rebuild
+        working-directory: lm-kit
+        run: |
+          python3 tools/lm-rebuild.py --root ../src --corpus ../corpus \
+            --models act --gate "${{ inputs.gate }}" --report ../rebuild.json
+
+      - name: keep the report
+        if: always() && inputs.rebuild
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuild-report
+          path: rebuild.json
+          if-no-files-found: ignore
