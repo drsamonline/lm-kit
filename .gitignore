@@ -6,3 +6,4 @@ run*/
 .DS_Store
 kernel/lm
 *.lmk
+kernel/lm.wasm

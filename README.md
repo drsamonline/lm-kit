@@ -126,6 +126,18 @@ table for the ranks and a byte expansion table built once at load.
 | throughput, 1.08 M / 1.51 M params, one core | 527 tok/s | **1,016 tok/s** |
 | binary | 56 KB | 56 KB |
 
+**It also builds to WebAssembly.** `make lm.wasm` produces a **44 KB** module that runs the same
+model under WASI and produces byte-identical output.
+
+| | size | throughput |
+|---|---|---|
+| native, `-O2` | 56 KB | 585 tok/s |
+| wasm32-wasi, `-Os` | **44 KB** | 157 tok/s |
+
+The size depends entirely on the flags: the default build carries 1.1 MB of debug info, `-Os`
+gives 44 KB. In a browser the 44 KB module still needs a WASI shim; under Node's WASI it runs as
+it is.
+
 BPE is faster per token *and* covers more text per token: 200 tokens of it is about 3× the
 characters of 200 byte tokens.
 
