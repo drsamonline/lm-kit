@@ -52,6 +52,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--adapter", action="store_true",
+                    help="export only the low-rank adapters, to be applied over a base at load")
     ap.add_argument("--q4", action="store_true",
                     help="4-bit with a per-row scale: half the file of int8, two values a byte")
     ap.add_argument("--fp32", action="store_true",
@@ -80,7 +82,21 @@ def main():
                scale.astype("<f4"), pad
 
     tensors = []
-    if a.q4:
+    if a.adapter:
+        import torch
+        sd = torch.load(os.path.join(a.run, "model.pt"), map_location="cpu")
+        pairs = {}
+        for key in sorted(sd):
+            if key.endswith(".A") or key.endswith(".B"):
+                pairs[key.replace(".", "/")] = sd[key].detach().numpy().astype("<f4")
+        if not pairs:
+            sys.exit("%s holds no adapters - train with --lora" % a.run)
+        for name in sorted(pairs):
+            tensors.append((name, pairs[name], 0))
+        rank = next(iter(pairs.values())).shape[0]
+        tensors.append(("lora/scale", np.array([16.0 / rank], dtype="<f4"), 0))
+        print("adapter: %d tensors, rank %d" % (len(pairs), rank))
+    elif a.q4:
         import torch
         sd = torch.load(os.path.join(a.run, "model.pt"), map_location="cpu")
         for key in sorted(sd):

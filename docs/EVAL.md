@@ -96,6 +96,17 @@ eight models                                  =  8.67 MB
 LoRA reaches 1.7138 against the full fine-tune's 1.6276, so it gives up about 5% of the improvement
 for 8% of the storage. That is the trade the family depends on, and it holds.
 
+**Shipped form.** `lm-export-c.py --adapter` writes the adapter as its own `.lmk`, and the kernel
+applies it at load:
+
+```bash
+./lm base.lmk "Job postings from 185 sources" --delta adapter.lmk
+# applied 40 adapters from adapter.lmk
+```
+
+A 1.1 MB int8 base plus a 338 KB adapter produces output byte-identical to the PyTorch LoRA model.
+The adapter is fp32 here; stored the way the weights are it is 86 KB.
+
 ## The gates each production model must clear
 
 | Model | Metric | Threshold |

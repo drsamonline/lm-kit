@@ -421,6 +421,48 @@ static void forward(Model *m, int token, int pos, Cache *c, float *logits) {
     matvec(m->head, n1, logits, m->vocab, d);
 }
 
+/* ------------------------------------------------------------------ adapters */
+
+/*
+ * A low-rank delta: W += scale * B @ A, applied once at load. This is what makes one base and
+ * several specialities smaller than several models — the base is loaded, the adapter is 8% of it.
+ */
+static void apply_delta(Model *m, const char *path) {
+    uint32_t n = 0;
+    Tensor *t = load_tensors(path, &n);
+    Tensor *sc = find(t, n, "lora/scale");
+    float scale = sc ? ((float *)sc->raw)[0] : 1.0f;
+    int applied = 0;
+
+    for (uint32_t l = 0; l < m->layers; l++) {
+        const char *nm[5] = {"qkv", "proj", "w1", "w3", "w2"};
+        float **tgt[5] = {&m->qkv[l], &m->proj[l], &m->w1[l], &m->w3[l], &m->w2[l]};
+        int rows[5] = {(int)(3 * m->dim), (int)m->dim, (int)m->ff, (int)m->ff, (int)m->dim};
+        int cols[5] = {(int)m->dim, (int)m->dim, (int)m->dim, (int)m->dim, (int)m->ff};
+        for (int k = 0; k < 5; k++) {
+            char na[64], nb[64];
+            snprintf(na, sizeof na, "blocks/%u/%s/A", l, nm[k]);
+            snprintf(nb, sizeof nb, "blocks/%u/%s/B", l, nm[k]);
+            Tensor *A = find(t, n, na), *B = find(t, n, nb);
+            if (!A || !B) continue;
+            int r = (int)A->dims[0], C = cols[k], R = rows[k];
+            const float *a = (const float *)A->raw, *b = (const float *)B->raw;
+            float *W = *tgt[k];
+            for (int i = 0; i < R; i++)
+                for (int c = 0; c < C; c++) {
+                    float acc = 0.0f;
+                    for (int j = 0; j < r; j++) acc += b[(size_t)i * r + j] * a[(size_t)j * C + c];
+                    W[(size_t)i * C + c] += scale * acc;
+                }
+            applied++;
+        }
+    }
+    for (uint32_t i = 0; i < n; i++) free(t[i].raw);
+    free(t);
+    if (!applied) fprintf(stderr, "no adapters applied from %s\n", path);
+    else fprintf(stderr, "applied %d adapters from %s\n", applied, path);
+}
+
 /* ------------------------------------------------------------------ main */
 
 #define BOS 257
@@ -434,6 +476,18 @@ int main(int argc, char **argv) {
     Model m;
     memset(&m, 0, sizeof m);
     load_model(&m, argv[1]);
+
+    /* --delta <file> is stripped out before the positionals are read */
+    const char *delta = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--delta") == 0 && i + 1 < argc) {
+            delta = argv[i + 1];
+            for (int j = i; j + 2 < argc; j++) argv[j] = argv[j + 2];
+            argc -= 2;
+            break;
+        }
+    }
+    if (delta) apply_delta(&m, delta);
 
     const char *prompt = argc > 2 ? argv[2] : "Job postings from 185 sources";
     int max_new = argc > 3 ? atoi(argv[3]) : 60;

@@ -18,6 +18,9 @@ Newest first. Every entry says what changed and what it cost.
   parameters (7.9%), reaches eval 1.7138 against the full fine-tune's 1.6276, and stores as 0.09 MB.
   Eight deltas plus one base is 1.77 MB against 8.67 MB for eight models, so the family's
   shared-base claim holds once the delta is low-rank rather than a difference of two fine-tunes.
+- `lm-export-c.py --adapter` and `lm --delta` — the adapter ships as its own file and the kernel
+  applies it at load. A 1.1 MB int8 base plus a 338 KB adapter reproduces the PyTorch LoRA output
+  byte for byte, across 40 adapters.
 
 ## 0.3.0 — 20 November 2026
 
