@@ -121,8 +121,32 @@ is for:
 which is the outcome the design wants: the kit discards what it cannot resolve rather than showing
 the user a fabricated rubric.
 
-The first run, on a model trained 30 steps on 20,000 pairs, scores zero on both and emits
-`"adddddd…"`. That is the honest floor: the harness measures, the model does not yet answer.
+The same shape covers the other three, each scored on the one field that decides its task:
+
+| Task | Metric | Asks |
+|---|---|---|
+| `book` | `book_exact`, `book_present` | which of 158 volumes the passage came from |
+| `materia` | `remedy_exact`, `remedy_present` | which remedy the proving describes |
+| `forge` | `id_exact`, `spec_usable` | whether the spec names a catalogue capability and carries the three keys KILN cannot do without |
+
+`spec_usable` is a weaker check than compiling the spec, and it says so: compiling needs KILN in the
+loop, which this repository does not have.
+
+### The floor, measured
+
+| Model | Steps | Pairs trained on | Every metric |
+|---|---|---|---|
+| `rep` | 30 | 20,000 | 0.000 |
+| `book` | 60 | 5,373 | 0.000 |
+| `materia` | 80 | 1,671 | 0.000 |
+
+Three models, three tasks, nothing usable — and not only on the task metric: `json_valid` is zero
+too, so at these step counts the models have not learned the output format, let alone the answer.
+The `act` model reached `json_valid` 0.411 at 180 steps, which is what separates a demo from a
+result.
+
+The harness is ready and the models are not. That is the honest state, and it is the argument for
+the GPU-week rather than against the design.
 
 ## Structured pruning
 

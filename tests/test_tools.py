@@ -127,6 +127,15 @@ try:
             fh.write(json.dumps({"input": "b", "output": {"book": "x"}}) + "\n")
         idx = ev.rubric_index(p)
         check("rubric index picks up ids", idx == {"r1"}, str(idx))
+
+    # the task scorers are arithmetic over generated rows, so they can be checked without a model
+    rows = [{"output": {"book": "a"}, "_got": {"book": "a"}},
+            {"output": {"book": "b"}, "_got": {"book": "a"}},
+            {"output": {"book": "c"}, "_got": None}]
+    right = sum(1 for r in rows if (r["output"].get("book") == (r["_got"] or {}).get("book")))
+    present = sum(1 for r in rows if (r["_got"] or {}).get("book") is not None)
+    check("one of three is right", right == 1, str(right))
+    check("two of three are present", present == 2, str(present))
     check("a missing file gives an empty index", ev.rubric_index("/nope") == set())
 except ImportError:
     print("  skip  torch is not installed here")

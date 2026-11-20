@@ -207,6 +207,23 @@ def main():
 
     # task-specific scoring, on the same generated text
     task_result = {}
+    if a.task in ("book", "materia", "forge"):
+        # one key decides each task: which book, which remedy, whether the spec is usable
+        field = {"book": "book", "materia": "remedy", "forge": "id"}[a.task]
+        right = present = 0
+        for r in rows:
+            want = (r.get("output") or {}).get(field)
+            got = (r.get("_got") or {}).get(field)
+            right += (want is not None and got == want)
+            present += (got is not None)
+        task_result = {field + "_exact": round(right / max(len(rows), 1), 4),
+                       field + "_present": round(present / max(len(rows), 1), 4)}
+        if a.task == "forge":
+            # a weaker check than compiling the spec: the three keys a KILN spec cannot omit
+            usable = sum(1 for r in rows if isinstance(r.get("_got"), dict)
+                         and {"id", "family", "spec_keys"} <= set(r["_got"]))
+            task_result["spec_usable"] = round(usable / max(len(rows), 1), 4)
+
     if a.task == "rep":
         index = rubric_index(os.path.join(a.corpus, "%s.train.jsonl" % a.model))
         hits = resolved = 0
@@ -238,10 +255,10 @@ def main():
     print("  field_match  %.3f   95%% CI %.3f-%.3f" % (result["field_match"], flo, fhi))
     if task_result:
         result.update(task_result)
-        print("  id_exact     %.3f   the rubric id the model returned was the right one"
-              % task_result["id_exact"])
-        print("  id_resolvable %.3f  and it exists in an index of %d"
-              % (task_result["id_resolvable"], task_result["index_size"]))
+        for k, v in task_result.items():
+            if k.endswith("_size"):
+                continue
+            print("  %-14s %.3f" % (k, v))
     if len(rows) < total:
         print("  note: a sample, not the split — run without --limit before quoting it")
     print("  examples")

@@ -8,6 +8,9 @@ Newest first. Every entry says what changed and what it cost.
 rubric id right) and `id_resolvable` (does that id exist in the index the app will search — 315,240
 of them). `id_resolvable` is the safety metric: a fabricated id scores zero.
 
+Scorers for `book`, `materia` and `forge` follow the same shape, each on the one field that decides
+its task. Measured floor across four tasks: zero, on models trained for 30–80 steps.
+
 Also: `lm-train.py --eval-limit`, because the repertory eval split is 6,211 blocks and scoring all
 of it turned a 30-step training run into a ten-minute one.
 
