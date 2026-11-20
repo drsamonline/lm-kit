@@ -50,7 +50,7 @@ def drifted_models(corpus, models):
     return changed + new, out.stdout
 
 
-def rebuild_one(model, corpus, runs, steps, batch, gate, eval_limit):
+def rebuild_one(model, corpus, runs, steps, batch, gate, eval_limit, prune=0.0, recover=0):
     """Train, evaluate, publish only on a pass. Returns (status, detail)."""
     target = os.path.join(runs, model)
     staging = os.path.join(runs, "." + model + ".staging")
@@ -77,6 +77,24 @@ def rebuild_one(model, corpus, runs, steps, batch, gate, eval_limit):
     if trained.returncode != 0:
         tail = trained.stderr.strip().splitlines()
         return "error", tail[-1] if tail else "train failed"
+
+    # optional structured pruning, then a short recovery, then the gate runs on the pruned model:
+    # a smaller model that fails its gate must not be published just because it is smaller
+    if prune and prune < 1.0:
+        pruned = staging + "-pruned"
+        shutil.rmtree(pruned, ignore_errors=True)
+        made = run([sys.executable, os.path.join(HERE, "lm-prune.py"),
+                    "--run", staging, "--keep", str(prune), "--out", pruned])
+        if made.returncode != 0:
+            shutil.rmtree(staging, ignore_errors=True)
+            return "error", "prune failed"
+        new_ff = json.load(open(os.path.join(pruned, "config.json")))["ff"]
+        if recover:
+            run([sys.executable, os.path.join(HERE, "lm-train.py"),
+                 "--corpus", corpus, "--model", model, "--out", pruned,
+                 "--steps", str(recover), "--batch", str(batch), "--resume", "--ff", str(new_ff)])
+        shutil.rmtree(staging, ignore_errors=True)
+        os.rename(pruned, staging)
 
     ev = [sys.executable, os.path.join(HERE, "lm-eval.py"),
           "--run", staging, "--corpus", corpus, "--model", model,
@@ -114,6 +132,10 @@ def main():
     ap.add_argument("--steps", type=int, default=60)
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--eval-limit", type=int, default=12)
+    ap.add_argument("--prune", type=float, default=0.0,
+                    help="keep this fraction of feed-forward channels, 0 disables")
+    ap.add_argument("--recover", type=int, default=0,
+                    help="steps to retrain after pruning, before the gate")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--report", default="")
     a = ap.parse_args()
@@ -146,7 +168,8 @@ def main():
     worst = 0
     for m in changed:
         t0 = time.time()
-        status, detail = rebuild_one(m, a.corpus, a.runs, a.steps, a.batch, a.gate, a.eval_limit)
+        status, detail = rebuild_one(m, a.corpus, a.runs, a.steps, a.batch, a.gate,
+                                     a.eval_limit, a.prune, a.recover)
         report["models"][m] = {"status": status, "detail": detail,
                                "seconds": round(time.time() - t0, 1)}
         print("  %-8s %-9s %s" % (m, status, detail))

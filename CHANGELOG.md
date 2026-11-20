@@ -9,7 +9,10 @@ shrinks `ff`. At equal recovery steps, 36% of the parameters go for +2.3% eval a
 (1.3365 against 1.3068, t = 1.17) — real enough to keep, inside seed noise at n=3. Q4 removed 50%
 of the bits and destroyed the model.
 
-Also: `lm-train.py --seed`, because a single run is not a measurement.
+Also: `lm-train.py --seed`, because a single run is not a measurement, and `lm-rebuild.py --prune`
+with `--recover`, so a rebuild can produce a *smaller* model and not only a newer one. The gate runs
+on the pruned checkpoint, not the full one — a smaller model that fails its gate must not ship
+because it is smaller.
 
 Also in this release: `lm-export-c.py --adapter` and `lm --delta`, so an adapter ships as its own
 file and the kernel applies it at load — verified byte-identical to PyTorch.

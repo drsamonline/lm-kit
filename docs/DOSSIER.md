@@ -375,7 +375,7 @@ Kept deliberately, because each one changed a number or a design.
 | 3 | two more extractors (note, sky) | no labelled data exists for either | unknown |
 | 4 | ship lm-act | nothing; replaces qwen2.5:3b in production | 2 weeks |
 | 5 | 10,240 tri-lingual BPE | Hindi and Gujarati parallel text does not exist yet | 1 week + data |
-| 6 | Q4, pruning and delta export | int8 seam exists | 1 week |
+| 6 | Q4, pruning and delta export — all three built and measured; pruning needs more seeds | done | — |
 | 7 | CI update loop — drift, gated rebuild and two-version rollback are built; only the push trigger is missing | the harvester is deterministic, so the hash is the trigger | 1 day |
 | 8 | spec normalisation for lm-forge | 154 specs, 0 canonical | 1 week |
 | 9 | delivery: EXE, APK, air-gap, seal | app-builder, frame-kit, lockhtml exist | 2 weeks |

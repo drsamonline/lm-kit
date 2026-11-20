@@ -206,6 +206,8 @@ lm-rebuild — close the loop: drift in, gated checkpoint out.
 | `--steps` | `int` default `60` |  |
 | `--batch` | `int` default `4` |  |
 | `--eval-limit` | `int` default `12` |  |
+| `--prune` | `float` default `0.0` | keep this fraction of feed-forward channels, 0 disables |
+| `--recover` | `int` default `0` | steps to retrain after pruning, before the gate |
 | `--dry-run` | store_true |  |
 | `--report` | default `""` |  |
 
@@ -213,7 +215,7 @@ lm-rebuild — close the loop: drift in, gated checkpoint out.
 |---|---|---|
 | `run` | `cmd, **kw` |  |
 | `drifted_models` | `corpus, models` |  |
-| `rebuild_one` | `model, corpus, runs, steps, batch, gate, eval_limit` | Train, evaluate, publish only on a pass. Returns (status, detail). |
+| `rebuild_one` | `model, corpus, runs, steps, batch, gate, eval_limit, prune=0.0, recover=0` | Train, evaluate, publish only on a pass. Returns (status, detail). |
 | `main` | `` |  |
 
 
