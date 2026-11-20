@@ -78,6 +78,10 @@ file          72 pairs  description → the file tool that does it
 audit         19 pairs  lesson or issue → guard, severity, status
 ```
 
+The repertory corpus is the one that matters: 359,432 pairs stream to **305,920 blocks — 78 M
+tokens in 157 MB**, loaded in 33 seconds. That is a real pretraining set, and the trainer holds it
+without materialising every block.
+
 Two runs of the same checkouts produce byte-identical files and identical SHA-256s. The
 licence gate skipped one book — Bach's *Free Thyself* (1932), which enters the US public
 domain on 1 January 2028 — and recorded why.
