@@ -2,6 +2,20 @@
 
 Newest first. Every entry says what changed and what it cost.
 
+## 0.7.0 — 21 November 2026
+
+**The scorer was punishing the model.** `lm-eval.py` capped generation at 96 tokens; a better-trained
+model writes longer values, never reaches its closing brace, and scored `json_valid` 0.000 for it.
+The budget is 192. Re-measured on the same 20 pairs:
+
+| Steps | json_valid | field_match |
+|---|---|---|
+| 180 | 0.600 | 0.067 |
+| ~600 | **1.000** | **0.350** |
+
+More training helped and the cap stopped truncating. "The format is learned, the vocabulary is not"
+was too pessimistic, for a reason that had nothing to do with the model.
+
 ## 0.6.0 — 20 November 2026
 
 **The evaluator scores tasks, not just JSON.** `lm-eval.py --task rep` adds `id_exact` (was the

@@ -51,12 +51,16 @@ train = load("lm_train", os.path.join(HERE, "lm-train.py"))
 
 # ---------------------------------------------------------------- generate
 @torch.no_grad()
-def generate_one(model, tok, prompt, seq, max_new=96):
+def generate_one(model, tok, prompt, seq, max_new=192):
     """Greedy, stopping when the JSON object closes.
 
     The scorer only reads the first balanced {...}, so generating past its closing brace
     cannot change the score. Stopping there is most of the runtime: a byte-level model
-    otherwise runs the full 96 tokens for every pair, each one re-reading the whole prefix.
+    otherwise runs the full budget for every pair, each one re-reading the whole prefix.
+
+    The budget matters. At 96 a better-trained model writes longer values, never closes the
+    brace, and scores zero for being verbose — which is exactly what happened once, and looked
+    like a regression in the model rather than a cap in the scorer.
     """
     ids = [train.BOS] + tok.encode("IN: %s\nOUT: " % prompt)
     out, depth, opened = [], 0, False

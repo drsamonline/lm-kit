@@ -259,8 +259,9 @@ BPE         → {"api": "SDD", "auth": "none", "cat": "Games & Comics",
 | `exact` | 0.000 | 0.000 |
 | `field_match` | 0.054 (0.030–0.083) | 0.000 |
 
-Neither can be trusted to emit valid JSON. The byte model gets punctuation right about half the
-time; the BPE model gets the values right and breaks on the comma. That is the measured case for
+Re-measured at a 192-token budget: the byte model emits valid JSON **1.000** of the time after
+about 600 steps, with **0.350** of fields correct. The earlier figures were truncated by a 96-token
+cap in the scorer. That is the measured case for
 grammar-masked decoding, which makes `json_valid` 1.0 by construction and gives the capacity back
 to the values.
 

@@ -107,6 +107,26 @@ applies it at load:
 A 1.1 MB int8 base plus a 338 KB adapter produces output byte-identical to the PyTorch LoRA model.
 The adapter is fp32 here; stored the way the weights are it is 86 KB.
 
+## More steps, and a scorer that was punishing the model
+
+The demo model was extended from 180 steps to about 600, resuming across sessions. Same 20 held-out
+pairs, same scorer:
+
+| Steps | json_valid | field_match |
+|---|---|---|
+| 180 | 0.600 (0.400–0.800) | 0.067 (0.025–0.108) |
+| ~600 | **1.000** | **0.350 (0.282–0.418)** |
+
+Two things changed. More training helped — the format goes from mostly-right to always-right and
+the values from 7% to 35% — and the scorer stopped truncating.
+
+The second matters more. At 96 tokens the better model wrote longer values, never reached its
+closing brace, and scored `json_valid` 0.000. That looked like a regression from training and was a
+cap in the evaluator. The budget is 192 now.
+
+So the earlier reading — "the format is learned, the vocabulary is not" — was too pessimistic, and
+pessimistic for a reason that had nothing to do with the model.
+
 ## Task-specific scoring
 
 A JSON that parses is not an answer. `lm-eval.py --task rep` scores the thing the repertory model
