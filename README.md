@@ -39,6 +39,7 @@ The user's own key through `sui` or `ai-bridge` is heavy AI. This is the missing
 | Corpus harvester | **working** — 503,159 pairs across nine models, deterministic |
 | Tokenizer | **working** — 4,096-token BPE, 3.29 characters per token |
 | Trainer | **working** — byte and BPE, masked loss, int8 export, model card |
+| Evaluator | **working** — scores the output, and fails a gate |
 | Production models | **not trained** — one GPU-week per model |
 
 ## Quickstart
@@ -57,6 +58,10 @@ python3 tools/lm-train.py --corpus ../corpus --model act --out ../run \
 
 # 4. sample
 python3 tools/lm-train.py --run ../run --generate "Job postings from 185 sources"
+
+# 5. score it — the metric is on the output, not the loss
+python3 tools/lm-eval.py --run ../run --corpus ../corpus --model act \
+        --gate json_valid=0.90 --gate field_match=0.70
 ```
 
 ## What it produced
@@ -112,7 +117,7 @@ Eight group models share one 3 M base plus a small delta each — nine specialit
 ## Repository layout
 
 ```
-tools/     the three stages — harvest, tokenize, train
+tools/     the four stages — harvest, tokenize, train, evaluate
 docs/      the dossier and the five proposals that led to it
 models/    the corpus manifest and the two demo checkpoints with their cards
 tests/     a smoke test that runs without the repositories or the network
