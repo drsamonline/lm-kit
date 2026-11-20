@@ -263,9 +263,13 @@ to the values.
 
 | | size | throughput, one core |
 |---|---|---|
-| native, `-O2`, byte model | 56 KB | 585 tok/s |
-| native, `-O2`, BPE model | 56 KB | **1,016 tok/s** |
-| wasm32-wasi, `-Os` | **44 KB** | 157 tok/s |
+| native, `-O2`, byte model | 56 KB | 319 tok/s |
+| native, `-O2`, BPE model | 56 KB | **533 tok/s** |
+| wasm32-wasi, `-Os` | **44 KB** | 82 tok/s |
+
+The first published figures were 527, 1,016 and 157 — wrong, because the benchmark divided a fixed
+200 by the time of a run that emitted about 110 tokens and stopped at EOS. The denominator was the
+error, and it is the same class of mistake as quoting a rate over twenty items.
 
 **Scale.** The repertory corpus streams to 305,920 blocks: 78 M tokens in 157 MB, loaded in 33 s.
 
@@ -314,6 +318,7 @@ Kept deliberately, because each one changed a number or a design.
 | NEO lowers to C via a backend crate | emitted from compiler/src/backend/mod.rs | the binding plan was adjusted |
 | one 22 M model, seven operations | seven specialists | the family changed shape |
 | `json_valid` 0.550 | 0.411 (0.286–0.536) on the full split | n=20 was sampling noise, not a measurement |
+| 527 / 1,016 / 157 tok/s | 319 / 533 / 82 tok/s | the benchmark divided by a token count the run never emitted |
 | `load_split` was fine | it died on the 359 k-pair corpus | streamed into `array('H')` |
 
 ## 15. Refusals and risks

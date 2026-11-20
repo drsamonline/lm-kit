@@ -14,9 +14,10 @@ was reproduced before it was fixed.
 | 4 | **P1** | `tools/lm-train.py` corpus_hash() | `h.update(open(p,"rb").read())` reads the whole split into memory — 134 MB for `rep`, twice over with the eval split, against a 1.5 GB cap | **fixed** — streams in 1 MB chunks |
 | 5 | **P2** | `tools/lm-train.py` load_split() | built a Python list of every token id; died with `MemoryError` on the repertory corpus | **fixed earlier** in fa35be8 — streams into `array('H')` |
 | 6 | **P2** | `tools/lm-eval.py` | defaulted to `--limit 60` and the report did not say so; the published numbers were n=20 of 56 held-out pairs, with no interval | **fixed** — every rate now carries a 95% bootstrap interval, the denominator is printed, and the default is the whole split. Re-measured: byte `json_valid` 0.411 (0.286–0.536), not the 0.550 the sample suggested |
-| 7 | **P2** | `kernel/lm.c` load_model() | the raw tensor buffers are never freed (`free(t)` frees the table, not the data) | **accepted** — process-lifetime, a few MB |
-| 8 | **P2** | `kernel/lm.c` forward() | uses `static` scratch buffers, so the kernel is not re-entrant | **accepted, documented** — one thread per process |
+| 7 | **P2** | `kernel/lm.c` load_model() | the raw tensor buffers are never freed (`free(t)` frees the table, not the data) | **fixed** — every payload is freed after dequantisation |
+| 8 | **P2** | `kernel/lm.c` forward() | used `static` scratch buffers, so the kernel was not re-entrant and two models could not run in one process | **fixed** — scratch lives in the caller's cache struct |
 | 9 | **P2** | `tools/lm-corpus-harvest.py` x_act() | the pico rule regex could match a parenthesised pair that is not a rule tuple | **accepted** — it yields a wrong pair rather than crashing, and the count is small |
+| 10 | **P1** | the benchmarks in the README | throughput was computed as 200 ÷ elapsed, but the run emits ~110 tokens and stops at EOS, so every rate was overstated about 1.7× | **fixed** — measured by tokens actually emitted: 319 / 533 / 82 tok/s |
 
 ## What the review did not find
 

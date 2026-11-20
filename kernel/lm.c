@@ -190,6 +190,7 @@ static void load_model(Model *m, const char *path) {
     }
     m->nfinal = get_vec(t, n, "norm/w");
     m->ok = 1;
+    for (uint32_t i = 0; i < n; i++) free(t[i].raw);
     free(t);
 }
 
@@ -337,6 +338,12 @@ static void silu_mul(const float *a, const float *b, float *out, int n) {
 /* forward one token at position pos, with the KV cache kept by the caller */
 typedef struct {
     float *k[MAXLAYERS], *v[MAXLAYERS]; /* seq x dim each */
+    /* scratch, owned by the caller: forward() keeps no state of its own, so two
+       models can run in one process and the function is safe to call from a thread
+       that owns its cache */
+    float x[MAXD], n1[MAXD], n2[MAXD], qkv[3 * MAXD], att[MAXD];
+    float h1[MAXFF], h3[MAXFF], hm[MAXFF];
+    float scores[MAXD];
 } Cache;
 
 static void forward(Model *m, int token, int pos, Cache *c, float *logits) {
@@ -345,8 +352,8 @@ static void forward(Model *m, int token, int pos, Cache *c, float *logits) {
         fprintf(stderr, "context full at %d (seq %u)\n", pos, m->seq);
         exit(3);
     }
-    static float x[MAXD], n1[MAXD], n2[MAXD], qkv[3 * MAXD], att[MAXD], h1[MAXFF], h3[MAXFF], hm[MAXFF];
-    static float scores[MAXD];
+    float *x = c->x, *n1 = c->n1, *n2 = c->n2, *qkv = c->qkv, *att = c->att;
+    float *h1 = c->h1, *h3 = c->h3, *hm = c->hm, *scores = c->scores;
 
     for (int i = 0; i < d; i++) x[i] = m->emb[(size_t)token * d + i];
 

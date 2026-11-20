@@ -126,7 +126,7 @@ table and the byte expansions are built once at load.
 
 | | byte model | BPE model |
 |---|---|---|
-| throughput, 1.08 M / 1.51 M params, one core | 527 tok/s | **1,016 tok/s** |
+| throughput, 1.08 M / 1.51 M params, one core | 319 tok/s | **533 tok/s** |
 | binary | 56 KB | 56 KB |
 
 It also builds to WebAssembly. `make lm.wasm` produces a 44 KB module that runs the same model
@@ -134,14 +134,18 @@ under WASI and returns byte-identical output.
 
 | | size | throughput |
 |---|---|---|
-| native, `-O2` | 56 KB | 585 tok/s |
-| wasm32-wasi, `-Os` | **44 KB** | 157 tok/s |
+| native, `-O2` | 56 KB | 319 tok/s |
+| wasm32-wasi, `-Os` | **44 KB** | 82 tok/s |
 
 Size depends entirely on the flags. The default build carries 1.1 MB of debug info; `-Os` gives
 44 KB. In a browser that module still needs a WASI shim, though under Node's WASI it runs as it is.
 
 BPE is faster per token and covers more text per token, so 200 of its tokens is roughly 600
 byte-tokens of output.
+
+These rates were first published as 527, 1,016 and 157 tok/s. Those were wrong: the benchmark
+divided a fixed 200 by the elapsed time of a run that emitted about 110 tokens and stopped at
+EOS. Dividing by what was actually generated gives the figures above.
 
 The inner loop is float arithmetic on dequantised weights, because the first job was to match
 PyTorch. An integer dot product is the next change, and it gets measured against a properly tuned
