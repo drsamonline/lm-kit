@@ -19,6 +19,10 @@ jobs:
         run: python3 tests/test_tools.py
       - name: the API reference matches the source
         run: python3 tools/gen-api.py --check
+      - name: the demo ships the same shim as the kernel
+        run: cmp -s kernel/wasi-mini.mjs docs/wasi-mini.mjs || (echo "docs/wasi-mini.mjs is a copy of kernel/wasi-mini.mjs and has drifted" && exit 1)
+      - name: the wasm build runs the model
+        run: node kernel/test-shim.mjs
       - name: manifest is valid json
         run: python3 -c "import json;json.load(open('models/corpus-manifest.json'));print('ok')"
       - name: every model card names its corpus
