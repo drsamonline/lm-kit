@@ -13,6 +13,7 @@ runs `gen-api.py --check` and fails when the two disagree.
 | [`lm-export-c.py`](../tools/lm-export-c.py) | lm-export-c — turn a trained checkpoint into one portable file the C kernel can load. |
 | [`corpus-drift.py`](../tools/corpus-drift.py) | corpus-drift — has the corpus moved since the last published manifest? |
 | [`lm-rebuild.py`](../tools/lm-rebuild.py) | lm-rebuild — close the loop: drift in, gated checkpoint out. |
+| [`lm-registry.py`](../tools/lm-registry.py) | lm-registry — versioned model storage with a way back. |
 | [`gen-api.py`](../tools/gen-api.py) | gen-api — write docs/API.md from the source, so the reference cannot describe a flag that is gone. |
 
 Usage, worked examples and the measured numbers are in the [README](../README.md).
@@ -205,6 +206,33 @@ lm-rebuild — close the loop: drift in, gated checkpoint out.
 | `run` | `cmd, **kw` |  |
 | `drifted_models` | `corpus, models` |  |
 | `rebuild_one` | `model, corpus, runs, steps, batch, gate, eval_limit` | Train, evaluate, publish only on a pass. Returns (status, detail). |
+| `main` | `` |  |
+
+
+---
+
+## `lm-registry.py`
+
+lm-registry — versioned model storage with a way back.
+
+| option | takes | what it does |
+|---|---|---|
+| `--runs` | default `os.path.join(ROOT` |  |
+| `--model` | flag |  |
+
+| function | arguments | returns |
+|---|---|---|
+| `registry_path` | `runs` |  |
+| `load_registry` | `runs` |  |
+| `save_registry` | `runs, reg` |  |
+| `sha` | `path` |  |
+| `archive_dir` | `runs, model, v` |  |
+| `snapshot` | `runs, model, v` | Copy the live checkpoint into the archive as version v. |
+| `restore` | `runs, model, v` |  |
+| `prune` | `runs, model, versions` | Keep the last KEEP snapshots; delete the rest. |
+| `cmd_publish` | `a` |  |
+| `cmd_rollback` | `a` |  |
+| `cmd_list` | `a` |  |
 | `main` | `` |  |
 
 

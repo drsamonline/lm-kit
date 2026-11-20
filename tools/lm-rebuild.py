@@ -90,6 +90,10 @@ def rebuild_one(model, corpus, runs, steps, batch, gate, eval_limit):
             if os.path.exists(src):
                 shutil.copy(src, os.path.join(target, f))
         shutil.rmtree(staging, ignore_errors=True)
+        # record the version after the files land, so v1 exists on a first publish and every
+        # later publish has a predecessor to roll back to
+        run([sys.executable, os.path.join(HERE, "lm-registry.py"), "publish",
+             "--model", model, "--runs", runs])
         return "published", "gate passed"
     shutil.rmtree(staging, ignore_errors=True)
     tail = [l.strip() for l in scored.stdout.splitlines() if "GATE" in l]

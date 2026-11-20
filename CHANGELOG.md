@@ -10,6 +10,9 @@ Newest first. Every entry says what changed and what it cost.
 - `lm-rebuild.py` — drift in, gated checkpoint out. A failed gate keeps the previous checkpoint and
   says why, so a model that got worse cannot ship because a script ran.
 - `corpus-drift.py` — re-harvests and compares each model's SHA-256 against the published manifest.
+- `lm-registry.py` — the last two versions of every checkpoint, a registry naming which is live,
+  and a rollback that restores the previous one. Verified end to end: two rebuilds produce v1 and
+  v2, rollback restores v1 and the live card names it.
 - `.github/workflows/corpus.yml` — weekly and on demand; warns and stops without `CORPUS_TOKEN`
   rather than failing on a missing directory. The rebuild step is opt-in.
 - Two argparse traps fixed on the way: `--gate` accumulated its default, so the stricter threshold
