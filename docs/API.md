@@ -153,6 +153,7 @@ lm-export-c — turn a trained checkpoint into one portable file the C kernel ca
 |---|---|---|
 | `--run` | required |  |
 | `--out` | required |  |
+| `--q4` | store_true | 4-bit with a per-row scale: half the file of int8, two values a byte |
 | `--fp32` | store_true | export float32 from model.pt instead of int8 — for a parity test |
 
 | function | arguments | returns |
