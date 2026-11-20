@@ -85,6 +85,37 @@ with tempfile.TemporaryDirectory() as tmp:
     check("carries the danger flag", pairs and pairs[0]["output"]["dangerous"] is False)
     check("records its source", pairs and pairs[0]["source"].startswith("TOOLWORKS/"))
 
+
+print("js literal reader (no execution)")
+objs = list(harvest.js_objects('window.Q.push({u:1,d:"E",q:"a {brace} inside",o:["x","y"],c:0,e:"why"});',
+                               ("q", "o", "c")))
+check("reads a bare-key object", len(objs) == 1, "got %d" % len(objs))
+check("keeps braces inside strings", objs and objs[0]["q"] == "a {brace} inside")
+check("reads the array", objs and objs[0]["o"] == ["x", "y"])
+check("reads numbers", objs and objs[0]["c"] == 0)
+
+print("pronunciation decoder")
+check("alphabet is 69 symbols", len(harvest.PHONES) == 69, "got %d" % len(harvest.PHONES))
+check("first symbol is AA0", harvest.PHONES[0] == "AA0")
+check("consonants follow the vowels", harvest.PHONES[45] == "B")
+
+print("extractors on a fixture (continued)")
+with tempfile.TemporaryDirectory() as tmp:
+    root = os.path.join(tmp, "src")
+    d = os.path.join(root, "ntet-homoeopathy-cbt", "data")
+    os.makedirs(d)
+    open(os.path.join(d, "q-unit12.js"), "w").write(
+        'window.QBANK.push({u:1,d:"E",q:"Which level?",o:["A","B"],c:1,e:"Because."},'
+        '{u:1,d:"M",q:"Bad",o:[],c:0,e:""});')
+    open(os.path.join(d, "glossary.js"), "w").write(
+        'window.GLOSSARY=[{t:"Pedagogy",u:1,d:"The art and science of teaching, applied to children."}];')
+    skip = []
+    pairs = list(harvest.x_tutor(root, skip))
+    check("keeps the well-formed question", any("Which level?" in q["input"] for q in pairs))
+    check("drops the question with no options", not any("Bad" in q["input"] for q in pairs))
+    check("carries the rationale", any(q["output"].get("rationale") == "Because." for q in pairs))
+    check("reads the glossary", any(q["input"] == "Pedagogy" for q in pairs))
+
 print()
 if FAILED:
     print("%d failed: %s" % (len(FAILED), ", ".join(FAILED)))

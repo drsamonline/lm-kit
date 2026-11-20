@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-19",
+ "generated": "2026-11-20",
  "models": {
   "act": {
    "licence_skips": 0,
@@ -72,6 +72,27 @@
     }
    }
   },
+  "file": {
+   "licence_skips": 0,
+   "pairs": 72,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "TOOLWORKS": 72
+   },
+   "splits": {
+    "eval": {
+     "bytes": 3117,
+     "pairs": 11,
+     "sha256": "95b7e73ca9f58b942940432bb202b24defa363227326e89120472b2020b0f4b7"
+    },
+    "train": {
+     "bytes": 17040,
+     "pairs": 61,
+     "sha256": "56203211ebcfdf24b2932059bef7da6625a38e6eb560ff3199bfc5971bf574a1"
+    }
+   }
+  },
   "forge": {
    "licence_skips": 0,
    "pairs": 98,
@@ -132,6 +153,48 @@
      "bytes": 139582235,
      "pairs": 352287,
      "sha256": "f91b4e39cd1912f1fb11f756267be0338c5bf2cf3c610b4153ebf2402e67ee34"
+    }
+   }
+  },
+  "tutor": {
+   "licence_skips": 0,
+   "pairs": 392,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "ntet-homoeopathy-cbt": 392
+   },
+   "splits": {
+    "eval": {
+     "bytes": 17876,
+     "pairs": 42,
+     "sha256": "844dcc446f37583e4e5a40195da3b8ac90e68ce3b90445c7a6b5010d36cb9900"
+    },
+    "train": {
+     "bytes": 161978,
+     "pairs": 350,
+     "sha256": "951232d560065b350e7398c07ce7f16a08b5faa569185a7a476c485bfe1d9456"
+    }
+   }
+  },
+  "verse": {
+   "licence_skips": 0,
+   "pairs": 133309,
+   "skip_examples": [],
+   "skip_reasons": [],
+   "sources": {
+    "app-poets-studio": 133309
+   },
+   "splits": {
+    "eval": {
+     "bytes": 565465,
+     "pairs": 2695,
+     "sha256": "db562e3ba4fc20fb53449281e90a7d612429137d198eeb4939edeb25ed3a0e50"
+    },
+    "train": {
+     "bytes": 27372679,
+     "pairs": 130614,
+     "sha256": "167a879d54a0fd8dbaa659c125e3c1131bc2b12714251ded75efa796fadcad1c"
     }
    }
   }

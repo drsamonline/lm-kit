@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>lm-kit — small models for the fleet</title>
+<meta name="description" content="Harvest a corpus from the repositories, train a tiny schema-locked transformer, export int8. Offline, no dependencies, no API key.">
+<style>
+  :root{--ink:#1a1a1a;--green:#2e7d32;--muted:#6b7280;--rule:#d8dcd8;--tint:#eef3ee;--bg:#fdfdfb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Calibri,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:56px 24px 96px}
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);font-weight:700}
+  h1{font-family:Georgia,serif;font-size:56px;line-height:1.05;margin:.2em 0 .1em;letter-spacing:-.02em}
+  .sub{font-family:Georgia,serif;font-size:22px;color:var(--green);margin:0 0 8px}
+  .lede{font-size:17px;color:var(--muted);font-style:italic;margin:18px 0 0;max-width:60ch}
+  hr{border:0;border-top:1px solid var(--rule);margin:40px 0}
+  h2{font-family:Georgia,serif;font-size:24px;margin:44px 0 12px;color:var(--green);font-weight:600}
+  h2:first-of-type{margin-top:0}
+  p{margin:0 0 14px}
+  table{width:100%;border-collapse:collapse;margin:8px 0 20px;font-size:14px}
+  th{text-align:left;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--green);border-bottom:1px solid var(--rule);padding:8px 10px}
+  td{border-bottom:1px solid var(--rule);padding:8px 10px;vertical-align:top}
+  td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px}
+  pre{background:var(--tint);border-left:3px solid var(--green);padding:14px 16px;overflow-x:auto;border-radius:0 4px 4px 0}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 0}
+  .badge{font-size:11px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--rule);border-radius:3px;padding:4px 9px;color:var(--muted);background:#fff}
+  .badge.ok{color:var(--green);border-color:#cfe3cf;background:var(--tint)}
+  .badge.wip{color:#8a5a00;border-color:#ecdcbc;background:#fdf6e8}
+  .note{border-left:3px solid #c9a227;background:#fdf9ee;padding:14px 16px;font-size:14px;margin:20px 0}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  a{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">drsamonline · kit 23</div>
+  <h1>lm-kit</h1>
+  <p class="sub">Small, schema-locked language models for the fleet</p>
+  <p class="lede">Harvest a corpus from the repositories, train a tiny transformer, export int8, ship it beside the app. One file per stage, standard library only, no network, no API key.</p>
+
+  <div class="badges">
+    <span class="badge ok">offline</span>
+    <span class="badge ok">zero dependencies</span>
+    <span class="badge ok">python 3.8+</span>
+    <span class="badge">polyform noncommercial</span>
+    <span class="badge wip">pipeline built · models not trained</span>
+  </div>
+
+  <hr>
+
+  <h2>The boundary</h2>
+  <p>This kit builds models that turn a sentence into <strong>the JSON an app already knows how to use</strong>. It does not build chat. A model here is a function with weights: text in, a schema-valid object out, and a refusal when the request does not fit.</p>
+  <p>The fleet already has both ends. <a href="https://github.com/drsamonline/ml-kit">ml-kit</a> is light AI — classic algorithms, no model. The user's own key through <a href="https://github.com/drsamonline/sui">sui</a> or <a href="https://github.com/drsamonline/ai-bridge">ai-bridge</a> is heavy AI. This is the middle.</p>
+
+  <div class="note"><strong>Nothing here is a diagnostic engine.</strong> Mapping case text to rubric identifiers is a retrieval aid. It is not a clinical judgement and must never be presented as one. See <a href="https://github.com/drsamonline/lm-kit/blob/main/DISCLAIMER.md">DISCLAIMER.md</a>.</div>
+
+  <h2>What it harvests</h2>
+  <table>
+    <tr><th>Model</th><th>Input → output</th><th style="text-align:right">Pairs</th></tr>
+    <tr><td><code>rep</code></td><td>rubric text → id, book, section, graded remedies</td><td class="n">359,432</td></tr>
+    <tr><td><code>verse</code></td><td>word → ARPAbet pronunciation</td><td class="n">133,309</td></tr>
+    <tr><td><code>book</code></td><td>prose → book, author, section</td><td class="n">5,502</td></tr>
+    <tr><td><code>act</code></td><td>description → tool or API, with constraints</td><td class="n">2,626</td></tr>
+    <tr><td><code>materia</code></td><td>proving paragraph → remedy</td><td class="n">1,709</td></tr>
+    <tr><td><code>tutor</code></td><td>question + options → key and rationale</td><td class="n">392</td></tr>
+    <tr><td><code>forge</code></td><td>capability or pitch → KILN spec</td><td class="n">98</td></tr>
+    <tr><td><code>file</code></td><td>description → the file tool that does it</td><td class="n">72</td></tr>
+    <tr><td><code>audit</code></td><td>lesson or issue → guard, severity, status</td><td class="n">19</td></tr>
+    <tr><td colspan="2"><strong>total</strong></td><td class="n"><strong>503,159</strong></td></tr>
+  </table>
+  <p>Two runs of the same checkouts produce byte-identical files and identical hashes. A book whose US public-domain year is still in the future is skipped and the skip is recorded with its reason.</p>
+
+  <h2>What it trained</h2>
+  <p>Same corpus, same shape, same 180 steps, same CPU. Only the tokenizer changes.</p>
+  <table>
+    <tr><th></th><th style="text-align:right">byte-level</th><th style="text-align:right">BPE 4,096</th></tr>
+    <tr><td>chars per token</td><td class="n">1.00</td><td class="n">3.29</td></tr>
+    <tr><td>parameters</td><td class="n">1,083,520</td><td class="n">1,514,240</td></tr>
+    <tr><td>eval loss per token</td><td class="n">1.0083</td><td class="n">3.2267</td></tr>
+    <tr><td><strong>bits per character</strong></td><td class="n">1.4547</td><td class="n"><strong>1.4149</strong></td></tr>
+  </table>
+  <p>The per-token row is a trap: divide by characters per token and BPE is 2.7% better. What it generates is the point.</p>
+<pre>byte-level  → {"api": "BBdicegi", "auth": "none", "cat": "Bungorincdinaly"
+BPE         → {"api": "SDD", "auth": "none", "cat": "Games &amp; Comics",
+               "cors": "unknown", "host": "cems..io", "https": "yes"}</pre>
+  <p>The format is learned; the vocabulary is not. That is the correct result for 1.5 M parameters and three CPU minutes, and it is what the 22 M model with a GPU-week closes.</p>
+
+  <h2>Run it</h2>
+<pre>python3 tools/lm-corpus-harvest.py --root ../src --out ../corpus
+python3 tools/lm-bpe.py train --corpus ../corpus --models act --vocab 4096 --bpe bpe-act.json
+python3 tools/lm-train.py --corpus ../corpus --model act --out ../run \
+        --tokenizer bpe --bpe bpe-act.json --steps 180 --batch 4</pre>
+
+  <h2>The family</h2>
+  <table>
+    <tr><th>Model</th><th>Job</th><th style="text-align:right">Params</th><th style="text-align:right">Q4</th></tr>
+    <tr><td>lm-book</td><td>read a book, return its structure</td><td class="n">24 M</td><td class="n">13 MB</td></tr>
+    <tr><td>lm-materia</td><td>a proving, as structured remedy knowledge</td><td class="n">30 M</td><td class="n">16 MB</td></tr>
+    <tr><td>lm-rep</td><td>case text → rubric IDs, never a remedy</td><td class="n">48 M</td><td class="n">26 MB</td></tr>
+    <tr><td>lm-act</td><td>one sentence → one command</td><td class="n">15 M</td><td class="n">8 MB</td></tr>
+    <tr><td>lm-tutor</td><td>question, answer, rationale</td><td class="n">34 M</td><td class="n">18 MB</td></tr>
+    <tr><td>lm-forge</td><td>idea → spec, or spec → patch</td><td class="n">60 M</td><td class="n">33 MB</td></tr>
+    <tr><td>lm-audit</td><td>diff or log → findings and a verdict</td><td class="n">24 M</td><td class="n">13 MB</td></tr>
+    <tr><td>lm-fleet</td><td>route and compose across the seven</td><td class="n">90 M</td><td class="n">48 MB</td></tr>
+  </table>
+
+  <footer>
+    <span>PolyForm Noncommercial 1.0.0 · free for personal use</span>
+    <span><a href="https://github.com/drsamonline/lm-kit">source</a> · <a href="https://drsamonline.github.io/">all projects</a></span>
+  </footer>
+</div>
+</body>
+</html>

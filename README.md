@@ -36,7 +36,7 @@ The user's own key through `sui` or `ai-bridge` is heavy AI. This is the missing
 |---|---|
 | Analysis | **complete** — 157 repositories, 73,426 files, 2,042,289 lines |
 | Model family | **decided** — eight core models, one shared base with eight deltas |
-| Corpus harvester | **working** — 369,386 pairs across six models, deterministic |
+| Corpus harvester | **working** — 503,159 pairs across nine models, deterministic |
 | Tokenizer | **working** — 4,096-token BPE, 3.29 characters per token |
 | Trainer | **working** — byte and BPE, masked loss, int8 export, model card |
 | Production models | **not trained** — one GPU-week per model |
@@ -63,10 +63,13 @@ python3 tools/lm-train.py --run ../run --generate "Job postings from 185 sources
 
 ```
 rep       359432 pairs  rubric text → id, book, section, graded remedies
+verse     133309 pairs  word → ARPAbet pronunciation, from the CMU dictionary
 book        5502 pairs  prose → book, author, section
 act         2626 pairs  description → tool or API, with constraints
 materia     1709 pairs  proving paragraph → remedy
+tutor        392 pairs  question + options → key and rationale
 forge         98 pairs  capability or pitch → KILN spec
+file          72 pairs  description → the file tool that does it
 audit         19 pairs  lesson or issue → guard, severity, status
 ```
 

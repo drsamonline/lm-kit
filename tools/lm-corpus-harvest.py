@@ -437,6 +437,218 @@ def x_forge(root, skip):
                 }
 
 
+
+# --------------------------------------------------------------------------
+# a JS literal reader — so a data file can be read without being executed
+# --------------------------------------------------------------------------
+# Several repositories keep their data in a .js file: `window.QBANK.push({...})`
+# and a dictionary inside a returned string literal. Running that code to read it
+# would mean executing repository content, which this harvester promises never to
+# do. So it reads the literals instead.
+
+_ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "'": "'", "/": "/", "b": "\b", "f": "\f"}
+
+
+def _skip_ws(s, i):
+    while i < len(s) and s[i] in " \t\r\n":
+        i += 1
+    return i
+
+
+def _read_string(s, i):
+    q = s[i]
+    i += 1
+    out = []
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            out.append(_ESC.get(s[i + 1], s[i + 1]))
+            i += 2
+            continue
+        if c == q:
+            return "".join(out), i + 1
+        out.append(c)
+        i += 1
+    return "".join(out), i
+
+
+def _read_key(s, i):
+    """A key is a quoted string or a bare identifier — JS allows both."""
+    i = _skip_ws(s, i)
+    if i < len(s) and s[i] in "\"'":
+        return _read_string(s, i)
+    m = re.match(r"[A-Za-z_$][\w$]*", s[i:])
+    if m:
+        return m.group(0), i + len(m.group(0))
+    return None, i
+
+
+def _read_object(s, i):
+    i = _skip_ws(s, i + 1)
+    obj = {}
+    while i < len(s) and s[i] != "}":
+        key, i = _read_key(s, i)
+        i = _skip_ws(s, i)
+        if i < len(s) and s[i] == ":":
+            i += 1
+        val, i = _read_value(s, i)
+        if key is not None:
+            obj[str(key)] = val
+        i = _skip_ws(s, i)
+        if i < len(s) and s[i] == ",":
+            i = _skip_ws(s, i + 1)
+    return obj, i + 1
+
+
+def _read_array(s, i):
+    i = _skip_ws(s, i + 1)
+    arr = []
+    while i < len(s) and s[i] != "]":
+        val, i = _read_value(s, i)
+        arr.append(val)
+        i = _skip_ws(s, i)
+        if i < len(s) and s[i] == ",":
+            i = _skip_ws(s, i + 1)
+    return arr, i + 1
+
+
+def _read_value(s, i):
+    i = _skip_ws(s, i)
+    if i >= len(s):
+        return None, i
+    c = s[i]
+    if c in "\"'":
+        return _read_string(s, i)
+    if c == "{":
+        return _read_object(s, i)
+    if c == "[":
+        return _read_array(s, i)
+    m = re.match(r"-?\d+(\.\d+)?", s[i:])
+    if m:
+        txt = m.group(0)
+        return (float(txt) if "." in txt else int(txt)), i + len(txt)
+    for lit, val in (("true", True), ("false", False), ("null", None), ("undefined", None)):
+        if s.startswith(lit, i):
+            return val, i + len(lit)
+    return None, i + 1
+
+
+def js_objects(text, must_have=()):
+    """Yield every object literal in a JS file that carries the given keys."""
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] == "{":
+            try:
+                obj, end = _read_object(text, i)
+            except (IndexError, ValueError):
+                i += 1
+                continue
+            if isinstance(obj, dict) and all(k in obj for k in must_have):
+                yield obj
+            i = max(end, i + 1)
+        else:
+            i += 1
+
+
+def x_tutor(root, skip):
+    """NTET: a question in, the key and its rationale out; a term in, its definition."""
+    base = os.path.join(root, "ntet-homoeopathy-cbt", "data")
+    if not os.path.isdir(base):
+        return
+    for name in sorted(os.listdir(base)):
+        path = os.path.join(base, name)
+        if not name.endswith(".js"):
+            continue
+        text = open(path, encoding="utf-8", errors="ignore").read()
+        if name.startswith("q-"):
+            for q in js_objects(text, ("q", "o", "c")):
+                stem = clean(q.get("q", ""))
+                opts = [clean(o, 200) for o in (q.get("o") or []) if isinstance(o, str)]
+                key = q.get("c")
+                if not stem or not opts or not isinstance(key, int) or not 0 <= key < len(opts):
+                    continue
+                yield {
+                    "input": stem + "\n" + "\n".join("%d. %s" % (i + 1, o) for i, o in enumerate(opts)),
+                    "output": {"answer": opts[key], "index": key,
+                               "rationale": clean(q.get("e", ""), 600),
+                               "unit": q.get("u"), "difficulty": q.get("d")},
+                    "source": os.path.relpath(path, root),
+                    "meta": {"task": "answer_with_rationale"},
+                }
+        elif name == "glossary.js":
+            for g in js_objects(text, ("t", "d")):
+                term, definition = clean(g.get("t", "")), clean(g.get("d", ""))
+                if len(term) < 2 or len(definition) < 20:
+                    continue
+                yield {
+                    "input": term,
+                    "output": {"definition": definition, "unit": g.get("u")},
+                    "source": os.path.relpath(path, root),
+                    "meta": {"task": "define_term"},
+                }
+
+
+VOWELS = ["AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER", "EY", "IH", "IY", "OW", "OY", "UH", "UW"]
+CONSONANTS = ["B", "CH", "D", "DH", "F", "G", "HH", "JH", "K", "L", "M", "N", "NG", "P", "R",
+              "S", "SH", "T", "TH", "V", "W", "Y", "Z", "ZH"]
+PHONES = [v + str(k) for v in VOWELS for k in range(3)] + CONSONANTS
+
+
+def x_verse(root, skip):
+    """Poets Studio: a word in, its ARPAbet pronunciation out."""
+    path = os.path.join(root, "app-poets-studio", "docs", "play", "dict.js")
+    if not os.path.isfile(path):
+        return
+    text = open(path, encoding="utf-8", errors="ignore").read()
+    m = re.search(r'return\s+"', text)
+    if not m:
+        return
+    body, _ = _read_string(text, m.end() - 1)
+    for line in body.split("\n"):
+        if "\t" not in line:
+            continue
+        word, enc = line.split("\t", 1)
+        word = word.strip()
+        if not word or len(word) > 40:
+            continue
+        for variant in enc.split("|")[:2]:
+            phones = [PHONES[ord(ch) - 33] for ch in variant if 0 <= ord(ch) - 33 < len(PHONES)]
+            if not phones:
+                continue
+            yield {
+                "input": word,
+                "output": {"phones": phones, "arpabet": " ".join(phones),
+                           "syllables": sum(1 for p in phones if p[-1:].isdigit())},
+                "source": os.path.relpath(path, root),
+                "meta": {"task": "pronounce"},
+            }
+
+
+FILE_CATEGORIES = {"files", "media & files", "data"}
+
+
+def x_file(root, skip):
+    """Tools that act on files: a request in, the tool and its category out."""
+    tw = os.path.join(root, "TOOLWORKS", "data", "catalogue.json")
+    doc = load_json(tw)
+    if not isinstance(doc, dict):
+        return
+    for t in doc.get("tools", []):
+        cat = (t.get("category") or "").strip()
+        if cat.lower() not in FILE_CATEGORIES:
+            continue
+        desc = clean(t.get("desc", ""))
+        if len(desc) < 12:
+            continue
+        yield {
+            "input": desc,
+            "output": {"tool": t.get("name"), "category": cat, "group": t.get("group"),
+                       "source": t.get("source"), "dangerous": bool(t.get("dangerous"))},
+            "source": "TOOLWORKS/data/catalogue.json",
+            "meta": {"task": "route_file_tool"},
+        }
+
+
 MODELS = {
     "rep": x_rep,
     "materia": x_materia,
@@ -444,6 +656,9 @@ MODELS = {
     "act": x_act,
     "audit": x_audit,
     "forge": x_forge,
+    "tutor": x_tutor,
+    "verse": x_verse,
+    "file": x_file,
 }
 
 
