@@ -2,6 +2,19 @@
 
 Newest first. Every entry says what changed and what it cost.
 
+## 0.4.0 — 20 November 2026
+
+**Two claims tested, one of them withdrawn.**
+
+- `lm-delta.py` — measures how much a continuation differs from its base. A real rebuild differs
+  by 3.4% in norm, but only 27% of entries are dead, so the delta is dense and storing it costs
+  what the model costs. **Base + deltas does not save space as a difference of two fine-tunes.**
+  It needs LoRA, which is not implemented.
+- `--q4` — 0.58 MB against int8's 1.1 MB, and it breaks the model at 1.08 M parameters. int8 is
+  the floor at this size. Measured, in `docs/EVAL.md`.
+- `lm-train.py --resume` — the trainer can now continue from a checkpoint. Before this it silently
+  started fresh, which means `lm-rebuild`'s warm start was a copy that changed nothing.
+
 ## 0.3.0 — 20 November 2026
 
 **The update loop closes.** `tools/corpus-drift.py` says whether the corpus has moved;

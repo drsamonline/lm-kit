@@ -28,6 +28,7 @@ TOOLS = [
     ("corpus-drift.py", "Report whether the corpus has moved since the published manifest."),
     ("lm-rebuild.py", "Retrain a drifted model and publish it only if it passes its gate."),
     ("lm-registry.py", "Keep the last two versions of each model, and roll back."),
+    ("lm-delta.py", "Measure how much a continuation differs from its base."),
     ("gen-api.py", "Write this page from the source."),
 ]
 

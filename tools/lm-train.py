@@ -278,6 +278,14 @@ def train(args):
           % (ntr, nev or 0, args.seq, time.time() - t0, ids.nbytes / 1e6))
 
     model = TinyLM(V, args.dim, args.layers, args.heads, args.ff, args.seq)
+    # --resume is what makes a rebuild a continuation rather than a new model. Without it the
+    # old weights are simply overwritten, which is what this script did before it had the flag.
+    if args.resume:
+        prior = os.path.join(args.out, "model.pt")
+        if not os.path.exists(prior):
+            sys.exit("--resume needs %s" % prior)
+        model.load_state_dict(torch.load(prior, map_location="cpu"))
+        print("resumed from %s" % prior)
     n = model.n_params()
     print("parameters {:,}  ({:.2f} MB at int8)".format(n, n / 1e6))
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.1)
@@ -387,6 +395,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus")
     ap.add_argument("--model", default="act")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue from model.pt already in --out, instead of starting fresh")
     ap.add_argument("--out")
     ap.add_argument("--dim", type=int, default=128)
     ap.add_argument("--layers", type=int, default=4)

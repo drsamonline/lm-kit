@@ -68,8 +68,10 @@ def rebuild_one(model, corpus, runs, steps, batch, gate, eval_limit):
         if cfg.get("tokenizer") == "bpe" and os.path.exists(os.path.join(target, "bpe.json")):
             shutil.copy(os.path.join(target, "bpe.json"), os.path.join(staging, "bpe.json"))
             cmd += ["--tokenizer", "bpe", "--bpe", os.path.join(staging, "bpe.json")]
-        # warm start: the old weights go in, so this is a continuation and not a new model
+        # warm start: copy the old weights in and tell the trainer to resume from them.
+        # Copying alone did nothing — lm-train ignored a model.pt that was already there.
         shutil.copy(os.path.join(target, "model.pt"), os.path.join(staging, "model.pt"))
+        cmd += ["--resume"]
 
     trained = run(cmd)
     if trained.returncode != 0:

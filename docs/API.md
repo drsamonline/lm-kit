@@ -14,6 +14,7 @@ runs `gen-api.py --check` and fails when the two disagree.
 | [`corpus-drift.py`](../tools/corpus-drift.py) | corpus-drift — has the corpus moved since the last published manifest? |
 | [`lm-rebuild.py`](../tools/lm-rebuild.py) | lm-rebuild — close the loop: drift in, gated checkpoint out. |
 | [`lm-registry.py`](../tools/lm-registry.py) | lm-registry — versioned model storage with a way back. |
+| [`lm-delta.py`](../tools/lm-delta.py) | lm-delta — how big is the difference between a base model and its continuation? |
 | [`gen-api.py`](../tools/gen-api.py) | gen-api — write docs/API.md from the source, so the reference cannot describe a flag that is gone. |
 
 Usage, worked examples and the measured numbers are in the [README](../README.md).
@@ -87,6 +88,7 @@ lm-train — train one small model from a harvested corpus.
 |---|---|---|
 | `--corpus` | flag |  |
 | `--model` | default `"act"` |  |
+| `--resume` | store_true | continue from model.pt already in --out, instead of starting fresh |
 | `--out` | flag |  |
 | `--dim` | `int` default `128` |  |
 | `--layers` | `int` default `4` |  |
@@ -234,6 +236,25 @@ lm-registry — versioned model storage with a way back.
 | `cmd_publish` | `a` |  |
 | `cmd_rollback` | `a` |  |
 | `cmd_list` | `a` |  |
+| `main` | `` |  |
+
+
+---
+
+## `lm-delta.py`
+
+lm-delta — how big is the difference between a base model and its continuation?
+
+| option | takes | what it does |
+|---|---|---|
+| `--base` | required |  |
+| `--tuned` | required |  |
+| `--out` | default `""` |  |
+| `--verbose` | store_true |  |
+
+| function | arguments | returns |
+|---|---|---|
+| `load` | `run` |  |
 | `main` | `` |  |
 
 
