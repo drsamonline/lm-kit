@@ -13,7 +13,7 @@ was reproduced before it was fixed.
 | 3 | **P1** | `kernel/lm.c` load_model() | `heads` and `seq` were **hardcoded to 4 and 256**. A model exported with any other shape would run and produce confidently wrong output | **fixed** — the shape travels in the `.lmk` as `config/shape`, and a file without it is refused |
 | 4 | **P1** | `tools/lm-train.py` corpus_hash() | `h.update(open(p,"rb").read())` reads the whole split into memory — 134 MB for `rep`, twice over with the eval split, against a 1.5 GB cap | **fixed** — streams in 1 MB chunks |
 | 5 | **P2** | `tools/lm-train.py` load_split() | built a Python list of every token id; died with `MemoryError` on the repertory corpus | **fixed earlier** in fa35be8 — streams into `array('H')` |
-| 6 | **P2** | `tools/lm-eval.py` | defaults to `--limit 60` and the report did not say so; the published numbers are n=20 of 56 held-out pairs, with no interval | **open** — the caveat is now in `docs/EVAL.md`; a bootstrap interval is the proper fix |
+| 6 | **P2** | `tools/lm-eval.py` | defaulted to `--limit 60` and the report did not say so; the published numbers were n=20 of 56 held-out pairs, with no interval | **fixed** — every rate now carries a 95% bootstrap interval, the denominator is printed, and the default is the whole split. Re-measured: byte `json_valid` 0.411 (0.286–0.536), not the 0.550 the sample suggested |
 | 7 | **P2** | `kernel/lm.c` load_model() | the raw tensor buffers are never freed (`free(t)` frees the table, not the data) | **accepted** — process-lifetime, a few MB |
 | 8 | **P2** | `kernel/lm.c` forward() | uses `static` scratch buffers, so the kernel is not re-entrant | **accepted, documented** — one thread per process |
 | 9 | **P2** | `tools/lm-corpus-harvest.py` x_act() | the pico rule regex could match a parenthesised pair that is not a rule tuple | **accepted** — it yields a wrong pair rather than crashing, and the count is small |
@@ -46,6 +46,6 @@ tests/test_tools.py            all checks passed
 
 ## Verdict
 
-Ship. The two P0s and both P1s are fixed and verified; the three P2s are accepted with reasons
-rather than quietly dropped. The remaining release-scale gaps are not in this repository: Pages is
+Ship. The two P0s, both P1s and the sampling P2 are fixed and verified; the two remaining P2s are
+accepted with reasons rather than quietly dropped. The remaining release-scale gaps are not in this repository: Pages is
 not enabled, and the documents still name private repositories while the repo is public.
