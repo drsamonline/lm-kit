@@ -17,18 +17,18 @@ beside the app. One file per stage, standard library only, no network, no API ke
 
 ---
 
-## The boundary — read this first
+## The boundary
 
 This kit builds models that turn a sentence into **the JSON an app already knows how to use**.
 It does not build chat. A model here is a function with weights: text in, a schema-valid object
 out, and a refusal when the request does not fit.
 
-**Nothing in this repository is a diagnostic or a clinical engine.** Several apps that will use
-these models are clinical. Mapping case text to rubric identifiers is a retrieval aid. It is not a
-clinical judgement and must never be presented as one.
+Nothing here is a diagnostic or a clinical engine. Several apps that will use these models are
+clinical, and mapping case text to rubric identifiers is a retrieval aid: not a clinical judgement,
+and never to be presented as one.
 
-The fleet already has both ends of this. `ml-kit` is light AI — classic algorithms, no model.
-The user's own key through `sui` or `ai-bridge` is heavy AI. This is the missing middle.
+The fleet already has both ends. `ml-kit` is light AI, classic algorithms with no model. The user's
+own key through `sui` or `ai-bridge` is heavy AI. This is the middle.
 
 ## Status
 
@@ -78,9 +78,8 @@ file          72 pairs  description → the file tool that does it
 audit         19 pairs  lesson or issue → guard, severity, status
 ```
 
-The repertory corpus is the one that matters: 359,432 pairs stream to **305,920 blocks — 78 M
-tokens in 157 MB**, loaded in 33 seconds. That is a real pretraining set, and the trainer holds it
-without materialising every block.
+The repertory corpus is the one that matters. Its 359,432 pairs stream to 305,920 blocks: 78 M
+tokens in 157 MB, loaded in 33 seconds. The trainer holds it without materialising every block.
 
 Two runs of the same checkouts produce byte-identical files and identical SHA-256s. The
 licence gate skipped one book — Bach's *Free Thyself* (1932), which enters the US public
@@ -97,11 +96,11 @@ Same corpus, same shape, same 180 steps, same CPU. Only the tokenizer changes.
 | eval loss per token | 1.0083 | 3.2267 |
 | **bits per character** | 1.4547 | **1.4149** |
 
-The per-token row is a trap: divide by characters per token and BPE is 2.7% better. What it
-generates is the point — the byte model produces `"cat": "Bungorincdinaly"`, the BPE model
-produces `"cat": "Games & Comics"`. The format is learned; the vocabulary is not. That is the
-correct result for 1.5 M parameters and three CPU minutes, and it is what the 22 M model with a
-GPU-week closes.
+Read the per-token row and BPE looks three times worse. Divide by characters per token and it is
+2.7% better. The generated text settles it: the byte model produces `"cat": "Bungorincdinaly"` and
+the BPE model produces `"cat": "Games & Comics"`. The format is learned; the vocabulary is not.
+That is the right result for 1.5 M parameters and three CPU minutes, and it is what the 22 M model
+and a GPU-week closes.
 
 ## The kernel
 
@@ -116,37 +115,36 @@ It loads the `.lmk` that `lm-export-c.py` writes, dequantises the int8 weights o
 the same forward pass the trainer ran: RMSNorm, RoPE, causal attention with a KV cache, SwiGLU,
 tied output. 47 KB of binary for a 1.08 M-parameter model.
 
-**Verified against PyTorch, for both tokenizers.** `kernel/parity.py` generates greedily on both
-sides and compares the strings; three prompts match exactly on the byte model and three on the BPE
-model, against fp32 exports. Against an int8 export the output diverges after about thirteen
-tokens — that is the quantiser, not the kernel, which is why the parity test uses fp32 and says so.
+Both tokenizers are verified against PyTorch. `kernel/parity.py` generates greedily on each side
+and compares the strings: three prompts match exactly on the byte model, three on the BPE model,
+against fp32 exports. An int8 export diverges after about thirteen tokens, which is the quantiser
+rather than the kernel, and is why the parity test runs fp32.
 
-The BPE merges travel inside the `.lmk`, so the kernel tokenises exactly as the trainer did —
-whitespace-split words, lowest-rank pair merged repeatedly, a space between words — with a hash
-table for the ranks and a byte expansion table built once at load.
+The BPE merges travel inside the `.lmk`, so the kernel tokenises as the trainer did: whitespace
+split words, lowest-rank pair merged repeatedly, a space between words. The ranks live in a hash
+table and the byte expansions are built once at load.
 
 | | byte model | BPE model |
 |---|---|---|
 | throughput, 1.08 M / 1.51 M params, one core | 527 tok/s | **1,016 tok/s** |
 | binary | 56 KB | 56 KB |
 
-**It also builds to WebAssembly.** `make lm.wasm` produces a **44 KB** module that runs the same
-model under WASI and produces byte-identical output.
+It also builds to WebAssembly. `make lm.wasm` produces a 44 KB module that runs the same model
+under WASI and returns byte-identical output.
 
 | | size | throughput |
 |---|---|---|
 | native, `-O2` | 56 KB | 585 tok/s |
 | wasm32-wasi, `-Os` | **44 KB** | 157 tok/s |
 
-The size depends entirely on the flags: the default build carries 1.1 MB of debug info, `-Os`
-gives 44 KB. In a browser the 44 KB module still needs a WASI shim; under Node's WASI it runs as
-it is.
+Size depends entirely on the flags. The default build carries 1.1 MB of debug info; `-Os` gives
+44 KB. In a browser that module still needs a WASI shim, though under Node's WASI it runs as it is.
 
-BPE is faster per token *and* covers more text per token: 200 tokens of it is about 3× the
-characters of 200 byte tokens.
+BPE is faster per token and covers more text per token, so 200 of its tokens is roughly 600
+byte-tokens of output.
 
-Correct before fast: the inner loop is float arithmetic on dequantised weights. Making it an
-integer dot product is the next change, and it will be benchmarked against a properly configured
+The inner loop is float arithmetic on dequantised weights, because the first job was to match
+PyTorch. An integer dot product is the next change, and it gets measured against a properly tuned
 baseline rather than a default one.
 
 ## The family
