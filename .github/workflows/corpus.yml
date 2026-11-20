@@ -8,6 +8,12 @@ name: corpus
 # obscurely on a missing directory.
 
 on:
+  # A source repository that changed its data can start this, with:
+  #   gh api repos/drsamonline/lm-kit/dispatches -f event_type=corpus-changed \
+  #     -F client_payload[repo]=<name>
+  # See templates/corpus-notify.yml for the workflow to paste into the source repo.
+  repository_dispatch:
+    types: [corpus-changed]
   workflow_dispatch:
     inputs:
       rebuild:

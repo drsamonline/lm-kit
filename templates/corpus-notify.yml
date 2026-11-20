@@ -1,0 +1,35 @@
+# Paste this into a data-bearing repository, e.g. TOOLWORKS, pico, or the homoeopathy JSON
+# library, as .github/workflows/notify-lm-kit.yml
+#
+# When the data changes, lm-kit is told. It cannot watch this repository from its own side:
+# a workflow in one repository cannot subscribe to pushes in another.
+#
+# One secret is needed here: LM_KIT_TOKEN, a fine-grained PAT with "Contents: read" on
+# drsamonline/lm-kit. Nothing else.
+
+name: notify lm-kit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - "**/*.json"
+      - "**/*.js"
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: dispatch
+        env:
+          TOKEN: ${{ secrets.LM_KIT_TOKEN }}
+          GH_TOKEN: ${{ secrets.LM_KIT_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::LM_KIT_TOKEN is not set; lm-kit was not told"
+            exit 0
+          fi
+          gh api repos/drsamonline/lm-kit/dispatches \
+            -f event_type=corpus-changed \
+            -F "client_payload[repo]=${{ github.event.repository.name }}"
