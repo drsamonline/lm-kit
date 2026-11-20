@@ -1,0 +1,54 @@
+name: corpus
+
+# Has the corpus moved since the last published manifest?
+#
+# This is the trigger for a rebuild. It needs the source repositories checked out beside
+# lm-kit, which needs a token that can read them: add a CORPUS_TOKEN secret with read access
+# to the data-bearing repos. Without it the job says so and stops, rather than failing
+# obscurely on a missing directory.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"   # Mondays, 03:00 UTC
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: lm-kit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: check the token
+        id: token
+        env:
+          TOKEN: ${{ secrets.CORPUS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::CORPUS_TOKEN is not set; the drift check cannot run"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: check out the sources
+        if: steps.token.outputs.ok == 'true'
+        env:
+          TOKEN: ${{ secrets.CORPUS_TOKEN }}
+        run: |
+          mkdir -p src
+          for repo in homoeopathic-materia-medica-repertory-json corpus-extendum TOOLWORKS \
+                      app-endpoints pico KILN forge knowledge ntet-homoeopathy-cbt app-poets-studio; do
+            git clone --depth 1 -q "https://x-access-token:$TOKEN@github.com/drsamonline/$repo.git" \
+              "src/$repo" || echo "::warning::could not clone $repo"
+          done
+
+      - name: drift
+        if: steps.token.outputs.ok == 'true'
+        working-directory: lm-kit
+        run: python3 tools/corpus-drift.py --root ../src --models act,book,materia,forge,audit,file

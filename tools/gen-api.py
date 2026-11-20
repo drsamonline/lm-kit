@@ -25,6 +25,8 @@ TOOLS = [
     ("lm-train.py", "Train a small transformer on a harvested corpus."),
     ("lm-eval.py", "Score a checkpoint on its held-out split."),
     ("lm-export-c.py", "Export a checkpoint to the .lmk the C kernel loads."),
+    ("corpus-drift.py", "Report whether the corpus has moved since the published manifest."),
+    ("gen-api.py", "Write this page from the source."),
 ]
 
 FUNC = re.compile(r"^def ([a-zA-Z_][\w]*)\(([^)]*)\):", re.M)

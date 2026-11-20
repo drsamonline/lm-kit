@@ -11,6 +11,8 @@ runs `gen-api.py --check` and fails when the two disagree.
 | [`lm-train.py`](../tools/lm-train.py) | lm-train — train one small model from a harvested corpus. |
 | [`lm-eval.py`](../tools/lm-eval.py) | lm-eval — score a checkpoint against its held-out split, and fail when it is not good enough. |
 | [`lm-export-c.py`](../tools/lm-export-c.py) | lm-export-c — turn a trained checkpoint into one portable file the C kernel can load. |
+| [`corpus-drift.py`](../tools/corpus-drift.py) | corpus-drift — has the corpus moved since the last published manifest? |
+| [`gen-api.py`](../tools/gen-api.py) | gen-api — write docs/API.md from the source, so the reference cannot describe a flag that is gone. |
 
 Usage, worked examples and the measured numbers are in the [README](../README.md).
 
@@ -154,4 +156,44 @@ lm-export-c — turn a trained checkpoint into one portable file the C kernel ca
 | function | arguments | returns |
 |---|---|---|
 | `write_tensor` | `fh, name, arr, dtype` |  |
+| `main` | `` |  |
+
+
+---
+
+## `corpus-drift.py`
+
+corpus-drift — has the corpus moved since the last published manifest?
+
+| option | takes | what it does |
+|---|---|---|
+| `--root` | flag | directory holding the repo checkouts, to re-harvest |
+| `--corpus` | flag | an existing harvest to compare instead |
+| `--manifest` | default `MANIFEST` |  |
+| `--models` | default `""` | comma-separated; default is every model in the manifest |
+| `--keep` | store_true | leave the re-harvest on disk |
+
+| function | arguments | returns |
+|---|---|---|
+| `sha` | `path` |  |
+| `hashes` | `corpus, models` |  |
+| `main` | `` |  |
+
+
+---
+
+## `gen-api.py`
+
+gen-api — write docs/API.md from the source, so the reference cannot describe a flag that is gone.
+
+| option | takes | what it does |
+|---|---|---|
+| `--check` | store_true | fail when docs/API.md is stale |
+
+| function | arguments | returns |
+|---|---|---|
+| `summary` | `src` | First paragraph of the module docstring, on one line. |
+| `functions` | `src` |  |
+| `options` | `src` |  |
+| `build` | `` |  |
 | `main` | `` |  |
