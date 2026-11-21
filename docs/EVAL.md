@@ -192,6 +192,23 @@ separates a demo from a result.
 The harness is ready and the models are not. That is the honest state, and it is the argument for
 the GPU-week rather than against the design.
 
+## Where the kernel spends its time
+
+Two checkpoints of the same architecture, one pruned to `ff 256`, timed by tokens actually emitted:
+
+| Model | Parameters | Throughput |
+|---|---|---|
+| ff 512 | 1,083,520 | 321 tok/s |
+| ff 256 | 690,304 | 402 tok/s |
+
+Parameters fall 1.57×, throughput rises 1.25×. A kernel bound purely by moving weights would show
+the same ratio on both. This one does not, so about a fifth of the time per token is work that does
+not shrink with the feed-forward: attention, the normalisations, the per-token loop.
+
+The kernel also dequantises at load — int8 expanded to fp32 once, so the hot loop moves four bytes
+where one would do, about 4.3 MB per token. At 321 tok/s that is 1.4 GB/s, well under what two cores
+can pull. So the first win is keeping weights int8 **resident**, not making the arithmetic integer.
+
 ## Structured pruning
 
 `lm-prune.py` removes whole feed-forward channels — rows from w1 and w3, the matching columns from
