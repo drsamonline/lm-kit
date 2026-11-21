@@ -6,6 +6,9 @@
 #
 # One secret is needed here: LM_KIT_TOKEN, a fine-grained PAT with "Contents: read" on
 # drsamonline/lm-kit. Nothing else.
+#
+# Verified end to end on 21 November 2026: a dispatch sent with this exact syntax arrived with
+# client_payload.repo set to the sending repository's name.
 
 name: notify lm-kit
 
