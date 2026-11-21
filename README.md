@@ -46,6 +46,9 @@ own key through `sui` or `ai-bridge` is heavy AI. This is the middle.
 
 ## Quickstart
 
+The first command needs the source repositories checked out beside this one. If you just want to
+see the pipeline run, skip to the sample below — it needs nothing but this repository.
+
 ```bash
 # 1. harvest — point it at a directory holding the repo checkouts
 python3 tools/lm-corpus-harvest.py --root ../src --out ../corpus
@@ -64,6 +67,17 @@ python3 tools/lm-train.py --run ../run --generate "Job postings from 185 sources
 # 5. score it — the metric is on the output, not the loss
 python3 tools/lm-eval.py --run ../run --corpus ../corpus --model act \
         --gate json_valid=0.90 --gate field_match=0.70
+```
+
+### Without the checkouts
+
+Sixty real pairs ship in `docs/sample/`, so the pipeline can be run from a clean clone:
+
+```bash
+python3 tools/lm-bpe.py train --corpus docs/sample --models act --vocab 1024 --bpe /tmp/bpe.json
+python3 tools/lm-train.py --corpus docs/sample --model act --out /tmp/run \
+        --tokenizer bpe --bpe /tmp/bpe.json --steps 120 --batch 2
+python3 tools/lm-eval.py --run /tmp/run --corpus docs/sample --model act --limit 10
 ```
 
 ## What it produced

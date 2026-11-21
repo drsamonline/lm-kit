@@ -42,6 +42,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import sys
 import time
 
@@ -376,6 +377,10 @@ def train(args):
 
     os.makedirs(args.out, exist_ok=True)
     torch.save(model.state_dict(), os.path.join(args.out, "model.pt"))
+    # a BPE run is not reproducible without its merges, and the evaluator rebuilds the tokenizer
+    # from the run directory. Ship it with the weights or the checkpoint is incomplete.
+    if args.tokenizer == "bpe" and args.bpe and os.path.exists(args.bpe):
+        shutil.copy(args.bpe, os.path.join(args.out, "bpe.json"))
     export_int8(model, os.path.join(args.out, "model.npz"))
     cfg = {"vocab": V, "tokenizer": getattr(args, "tokenizer", "bytes"), "dim": args.dim, "layers": args.layers, "heads": args.heads,
            "ff": args.ff, "seq": args.seq, "params": n}

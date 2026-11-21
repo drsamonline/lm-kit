@@ -52,6 +52,10 @@ def read_texts(corpus, models, limit=0):
 
 
 def train(texts, vocab_size, min_count=2, verbose=True):
+    if not texts:
+        # an empty corpus produces a 256-token vocabulary that trains nothing and looks like
+        # success. Fail instead of writing it.
+        raise SystemExit("no text to train on — check --corpus and --models")
     freq = Counter()
     for t in texts:
         for w in WORD.findall(t):
