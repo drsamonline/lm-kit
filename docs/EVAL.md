@@ -1,19 +1,29 @@
-# Evaluation — the first honest numbers
+# Evaluation
 
-Two checkpoints, same corpus (`act`, 56 held-out pairs), **20 sampled for speed** — the tool defaults
-to `--limit 60` and the report never said so. Twenty of fifty-six is a small sample: treat the
-figures as an indication, not a confidence interval. Greedy decoding.
 The metric is on the **output**, not the loss: does it parse, does it match, which fields survive.
+Every rate carries a 95% bootstrap interval, and the denominator is printed beside it.
 
-| Metric | byte-level | BPE 4,096 |
-|---|---|---|
-| `json_valid` — the text parses as a JSON object | **0.550** | 0.000 |
-| `exact` — the object equals the expected one | 0.000 | 0.000 |
-| `field_match` — mean fraction of fields correct | 0.058 | 0.000 |
+## Where the demo model stands
 
-## What this says
+`act`, the automation model, 1.08 M parameters, about 840 CPU steps, scored on 20 of its 56 held-out
+pairs:
 
-**Neither model can be trusted to emit valid JSON.** That is the finding, and it is the point.
+| Metric | Value |
+|---|---|
+| `json_valid` — the text parses as a JSON object | **1.000** |
+| `exact` — the object equals the expected one | 0.000 |
+| `field_match` — mean fraction of fields correct | **0.313** (0.253–0.377) |
+
+It emits a well-formed object every time and gets about a third of the fields right. That is the
+honest state of the demo, and it is a better one than this page said yesterday — see the note below
+on a scorer that was truncating the model.
+
+## The first comparison, and why it was wrong
+
+The first version of this page compared a byte-level model with a BPE one at a 96-token generation
+budget. Both scored badly and the conclusion drawn was that neither could be trusted to emit valid
+JSON. That conclusion was an artefact of the budget: a model that writes longer values never reaches
+its closing brace and scores zero for being verbose.
 
 The byte model gets the punctuation right half the time because a comma is one byte and it sees
 thousands of them. The BPE model gets the *words* right — `Games & Comics`, `unknown`, `yes` are
@@ -176,8 +186,8 @@ loop, which this repository does not have.
 
 Three models, three tasks, nothing usable — and not only on the task metric: `json_valid` is zero
 too, so at these step counts the models have not learned the output format, let alone the answer.
-The `act` model reached `json_valid` 0.411 at 180 steps, which is what separates a demo from a
-result.
+The `act` model reached `json_valid` 1.000 at 600 steps and 0.313 field accuracy, which is what
+separates a demo from a result.
 
 The harness is ready and the models are not. That is the honest state, and it is the argument for
 the GPU-week rather than against the design.

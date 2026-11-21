@@ -251,13 +251,13 @@ BPE         → {"api": "SDD", "auth": "none", "cat": "Games & Comics",
                "cors": "unknown", "host": "cems..io", "https": "yes"
 ```
 
-**Evaluation.** All 56 held-out pairs, greedy, 95% bootstrap interval over 2,000 resamples.
+**Evaluation.** The `act` model at about 840 steps, 20 of 56 held-out pairs, greedy:
 
-| Metric | byte-level | BPE 4,096 |
-|---|---|---|
-| `json_valid` | **0.411** (0.286–0.536) | 0.000 |
-| `exact` | 0.000 | 0.000 |
-| `field_match` | 0.054 (0.030–0.083) | 0.000 |
+| Metric | Value |
+|---|---|
+| `json_valid` | **1.000** |
+| `exact` | 0.000 |
+| `field_match` | **0.313** (0.253–0.377) |
 
 Re-measured at a 192-token budget: the byte model emits valid JSON **1.000** of the time after
 about 600 steps, with **0.350** of fields correct. The earlier figures were truncated by a 96-token
@@ -325,6 +325,8 @@ Kept deliberately, because each one changed a number or a design.
 | one 22 M model, seven operations | seven specialists | the family changed shape |
 | `json_valid` 0.550 | 0.411 (0.286–0.536) on the full split | n=20 was sampling noise, not a measurement |
 | 527 / 1,016 / 157 tok/s | 319 / 533 / 82 tok/s | the benchmark divided by a token count the run never emitted |
+| "neither model can emit valid JSON" | 1.000 `json_valid`, 0.313 `field_match` | the scorer capped generation at 96 tokens and truncated longer output |
+| 0.350 `field_match` at 600 steps | 0.313 at 840, loss still falling | more steps did not move the task; capacity is the limit |
 | `load_split` was fine | it died on the 359 k-pair corpus | streamed into `array('H')` |
 
 ## 15. Refusals and risks
@@ -372,7 +374,7 @@ Kept deliberately, because each one changed a number or a design.
 | Order | Work | Blocked by | Effort |
 |---|---|---|---|
 | 1 | lm-rep at production size | one GPU-week | 1 week |
-| 2 | the integer kernel and quad-interleaved layout | nothing; 1,016 tok/s is the number to beat | 2 weeks |
+| 2 | the integer kernel and quad-interleaved layout | nothing; 533 tok/s is the number to beat | 2 weeks |
 | 3 | two more extractors (note, sky) | no labelled data exists for either | unknown |
 | 4 | ship lm-act | nothing; replaces qwen2.5:3b in production | 2 weeks |
 | 5 | 10,240 tri-lingual BPE | Hindi and Gujarati parallel text does not exist yet | 1 week + data |

@@ -35,12 +35,14 @@ own key through `sui` or `ai-bridge` is heavy AI. This is the middle.
 | | |
 |---|---|
 | Analysis | **complete** — 157 repositories, 73,426 files, 2,042,289 lines |
-| Model family | **decided** — eight core models, one shared base with eight deltas |
+| Model family | **decided** — eight core models, one shared base with low-rank deltas |
 | Corpus harvester | **working** — 503,159 pairs across nine models, deterministic |
 | Tokenizer | **working** — 4,096-token BPE, 3.29 characters per token |
-| Trainer | **working** — byte and BPE, masked loss, int8 export, model card |
-| Evaluator | **working** — scores the output, and fails a gate |
-| Production models | **not trained** — one GPU-week per model |
+| Trainer | **working** — byte and BPE, masked loss, LoRA, resume, int8 export, model card |
+| Evaluator | **working** — scores the task, carries intervals, fails a gate |
+| Kernel | **working** — C and WebAssembly, verified against PyTorch, applies adapters |
+| Demo model | **1.08 M params** — valid JSON every time, a third of fields right |
+| Production models | **not trained** — capacity-limited on CPU, needs a GPU-week |
 
 ## Quickstart
 
