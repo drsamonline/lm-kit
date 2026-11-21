@@ -38,6 +38,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      # prints what the source repository said, so the dispatch payload is verified rather than
+      # assumed: a malformed client_payload looks identical to a correct one from the outside
+      - name: what asked for this run
+        run: |
+          echo "event:   ${{ github.event_name }}"
+          echo "repo:    ${{ github.event.client_payload.repo }}"
+          echo "sha:     ${{ github.event.client_payload.sha }}"
+
       - name: check the token
         id: token
         env:
