@@ -380,7 +380,17 @@ def train(args):
     cfg = {"vocab": V, "tokenizer": getattr(args, "tokenizer", "bytes"), "dim": args.dim, "layers": args.layers, "heads": args.heads,
            "ff": args.ff, "seq": args.seq, "params": n}
     json.dump(cfg, open(os.path.join(args.out, "config.json"), "w"), indent=1)
-    card = {"model": "lm-" + args.model, "corpus": args.model, "steps": args.steps,
+    # steps must be the total the model has seen, not the length of this session: a resumed run
+    # that wrote its own step count made an 840-step model report 120
+    prior_steps = 0
+    prior_card = os.path.join(args.out, "card.json")
+    if args.resume and os.path.exists(prior_card):
+        try:
+            prior_steps = int(json.load(open(prior_card)).get("steps", 0))
+        except (ValueError, TypeError):
+            prior_steps = 0
+    card = {"model": "lm-" + args.model, "corpus": args.model,
+            "steps": prior_steps + args.steps, "session_steps": args.steps,
             "batch": args.batch, "lr": args.lr, "params": n,
             "final_train_loss": round(float(np.mean(losses[-20:])), 4),
             "eval_loss": None if eval_loss is None else round(eval_loss, 4),

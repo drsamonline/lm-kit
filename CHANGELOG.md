@@ -2,6 +2,9 @@
 
 Newest first. Every entry says what changed and what it cost.
 
+Versions 0.3.0 to 0.6.0 are recorded here and were never tagged; the first two were. v0.7.0 is the
+first tag since v0.2.0 and it covers everything in between.
+
 ## 0.7.0 — 21 November 2026
 
 **The scorer was punishing the model.** `lm-eval.py` capped generation at 96 tokens; a better-trained
