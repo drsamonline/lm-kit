@@ -104,14 +104,22 @@ def cmd_publish(a):
         return 2
     card = json.load(open(card_path))
 
+    existing = reg["models"].get(model, {}).get("versions", [])
+    # the highest version in the registry, not the count: pruning keeps two entries, so the count
+    # stops advancing and the fourth publish reused v3, overwriting its snapshot
+    next_v = max((e["v"] for e in existing), default=0) + 1
     entry = {
-        "v": len(reg["models"].get(model, {}).get("versions", [])) + 1,
+        "v": next_v,
         "published": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "card_sha256": sha(card_path),
         "params": card.get("params"),
         "eval_loss": card.get("eval_loss"),
         "corpus_sha256": card.get("corpus_sha256"),
     }
+    if os.path.isdir(archive_dir(a.runs, model, next_v)):
+        print("%s v%d already has a snapshot on disk; refusing to overwrite it"
+              % (model, next_v))
+        return 2
     m = reg["models"].setdefault(model, {"current": 0, "versions": []})
     m["versions"].append(entry)
     m["versions"] = prune(a.runs, model, m["versions"])

@@ -116,6 +116,29 @@ with tempfile.TemporaryDirectory() as tmp:
     check("carries the rationale", any(q["output"].get("rationale") == "Because." for q in pairs))
     check("reads the glossary", any(q["input"] == "Pedagogy" for q in pairs))
 
+print("registry (pure file operations, so this runs everywhere)")
+reg = load("lm_registry", os.path.join(HERE, "..", "tools", "lm-registry.py"))
+with tempfile.TemporaryDirectory() as tmp:
+    runs = os.path.join(tmp, "models")
+    live = os.path.join(runs, "m")
+    os.makedirs(live)
+    for f in ("config.json", "card.json"):
+        open(os.path.join(live, f), "w").write('{"steps": 1}')
+
+    class A:
+        model, runs = "m", runs
+
+    versions = []
+    for _ in range(4):
+        reg.cmd_publish(A)
+        r = json.load(open(os.path.join(runs, "registry.json")))
+        versions.append(r["models"]["m"]["current"])
+    check("versions advance past the prune", versions == [1, 2, 3, 4], str(versions))
+    check("only the last two snapshots survive",
+          sorted(os.listdir(os.path.join(runs, ".archive", "m"))) == ["v3", "v4"])
+    check("rollback moves back one", reg.cmd_rollback(A) == 0 and
+          json.load(open(os.path.join(runs, "registry.json")))["models"]["m"]["current"] == 3)
+
 print("task scorers (skipped without torch)")
 try:
     import torch  # noqa: F401
