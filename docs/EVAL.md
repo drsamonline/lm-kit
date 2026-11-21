@@ -205,9 +205,23 @@ Parameters fall 1.57×, throughput rises 1.25×. A kernel bound purely by moving
 the same ratio on both. This one does not, so about a fifth of the time per token is work that does
 not shrink with the feed-forward: attention, the normalisations, the per-token loop.
 
-The kernel also dequantises at load — int8 expanded to fp32 once, so the hot loop moves four bytes
-where one would do, about 4.3 MB per token. At 321 tok/s that is 1.4 GB/s, well under what two cores
-can pull. So the first win is keeping weights int8 **resident**, not making the arithmetic integer.
+The kernel also dequantised at load — int8 expanded to fp32 once, so the hot loop moved four bytes
+where one would do. That looked like the obvious thing to cut. It was not.
+
+**Keeping int8 resident was built and measured, and it does not make it faster:**
+
+| Model | dequantised at load | int8 resident |
+|---|---|---|
+| int8 weights | 295 tok/s | 296 tok/s |
+| fp32 weights | 309 tok/s | 328 tok/s |
+
+No change. A 1.08 M model is 1.1 MB as int8 and 4.3 MB as fp32 — both fit in cache, so weight
+traffic was never the constraint. The sign-extend on every int8 element costs what the saved
+bandwidth would have bought.
+
+The change is kept for a different reason: **resident memory falls from 4.3 MB to 1.1 MB.** On a
+desktop that is nothing; in a browser tab or on a microcontroller it is the difference between
+fitting and not.
 
 ## Structured pruning
 

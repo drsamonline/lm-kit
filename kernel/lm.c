@@ -43,12 +43,28 @@ typedef struct {
     unsigned char *raw;
 } Tensor;
 
+/*
+ * A matrix the hot loop can read without a dequantise pass.
+ *
+ * int8 weights stay int8: the row is scaled once after the accumulation, so the loop moves one
+ * byte per weight instead of four. Measured before this change, the kernel moved 4.3 MB a token
+ * at 1.4 GB/s — well under what two cores can pull, so the traffic was the obvious thing to cut.
+ */
+typedef struct {
+    const int8_t *q;    /* int8 weights, rows x cols */
+    const float *s;     /* one scale per row */
+    const float *f;     /* or float weights, when the file was exported fp32 */
+    int rows, cols;
+} Mat;
+
 typedef struct {
     uint32_t vocab, dim, layers, heads, ff, seq;
-    float *emb, *head;
-    float *qkv[MAXLAYERS], *proj[MAXLAYERS];
-    float *w1[MAXLAYERS], *w3[MAXLAYERS], *w2[MAXLAYERS];
+    Mat emb, head;
+    Mat qkv[MAXLAYERS], proj[MAXLAYERS];
+    Mat w1[MAXLAYERS], w3[MAXLAYERS], w2[MAXLAYERS];
     float *n1[MAXLAYERS], *n2[MAXLAYERS], *nfinal;
+    Tensor *tensors;      /* the file's buffers live as long as the model does */
+    uint32_t ntensors;
     int ok;
 } Model;
 
@@ -96,58 +112,69 @@ static Tensor *find(Tensor *t, uint32_t n, const char *name) {
     return NULL;
 }
 
-/* int8 with a per-row scale -> float, one row at a time */
-static float *dequant_rows(Tensor *w, Tensor *scale, int rows, int cols) {
-    float *out = malloc(sizeof(float) * rows * cols);
-    const int8_t *q = (const int8_t *)w->raw;
-    const float *s = (const float *)scale->raw;
-    for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
-            out[r * cols + c] = (float)q[r * cols + c] * s[r];
-    return out;
-}
-
-/* 4-bit, two values a byte, one fp32 scale per row */
-static float *dequant_q4(Tensor *w, Tensor *scale, int rows, int cols) {
-    float *out = malloc(sizeof(float) * rows * cols);
-    const uint8_t *q = (const uint8_t *)w->raw;
-    const float *s = (const float *)scale->raw;
-    int packed_cols = (int)w->dims[w->ndim - 1];
-    for (int r = 0; r < rows; r++) {
-        const uint8_t *row = q + (size_t)r * packed_cols;
-        float sc = s[r];
-        for (int c = 0; c < cols; c++) {
-            uint8_t b = row[c >> 1];
-            int v = (c & 1) ? (b >> 4) : (b & 0x0F);
-            if (v >= 8) v -= 16;
-            out[(size_t)r * cols + c] = v * sc;
-        }
+/* Build a Mat over the file's own buffers. Nothing is expanded here: int8 stays int8. */
+static Mat mat_of(Tensor *t, uint32_t n, const char *base, int rows, int cols) {
+    Mat m;
+    memset(&m, 0, sizeof m);
+    m.rows = rows;
+    m.cols = cols;
+    Tensor *w = find(t, n, base);
+    if (!w) { fprintf(stderr, "missing tensor %s\n", base); exit(1); }
+    if (w->dtype == 0) {
+        m.f = (const float *)w->raw;
+        return m;
     }
-    return out;
+    if (w->dtype == 1) {
+        char sname[96];
+        snprintf(sname, sizeof sname, "%s.scale", base);
+        Tensor *sc = find(t, n, sname);
+        if (!sc) { fprintf(stderr, "missing scale for %s\n", base); exit(1); }
+        m.q = (const int8_t *)w->raw;
+        m.s = (const float *)sc->raw;
+        return m;
+    }
+    if (w->dtype == 3) {
+        /* 4-bit is expanded once: it is half the size on disk and the unpack is not per-token */
+        char sname[96];
+        snprintf(sname, sizeof sname, "%s.scale", base);
+        Tensor *sc = find(t, n, sname);
+        if (!sc) { fprintf(stderr, "missing scale for %s\n", base); exit(1); }
+        float *out = malloc(sizeof(float) * rows * cols);
+        const uint8_t *q = (const uint8_t *)w->raw;
+        const float *s = (const float *)sc->raw;
+        int packed_cols = (int)w->dims[w->ndim - 1];
+        for (int r = 0; r < rows; r++) {
+            const uint8_t *row = q + (size_t)r * packed_cols;
+            for (int c = 0; c < cols; c++) {
+                uint8_t b = row[c >> 1];
+                int v = (c & 1) ? (b >> 4) : (b & 0x0F);
+                if (v >= 8) v -= 16;
+                out[(size_t)r * cols + c] = v * s[r];
+            }
+        }
+        m.f = out;
+        return m;
+    }
+    fprintf(stderr, "unsupported dtype %d for %s\n", w->dtype, base);
+    exit(1);
 }
 
-static float *dequant_plain(Tensor *w) {
-    float *out = malloc(w->nbytes);
-    memcpy(out, w->raw, w->nbytes);
-    return out;
-}
-
-static float *get_mat(Tensor *t, uint32_t n, const char *base, int rows, int cols) {
-    char sname[96];
+static float *vec_of(Tensor *t, uint32_t n, const char *base) {
     Tensor *w = find(t, n, base);
     if (!w) { fprintf(stderr, "missing tensor %s\n", base); exit(1); }
-    if (w->dtype == 0) return dequant_plain(w);
-    snprintf(sname, sizeof sname, "%s.scale", base);
-    Tensor *s = find(t, n, sname);
-    if (!s) { fprintf(stderr, "missing scale for %s\n", base); exit(1); }
-    if (w->dtype == 3) return dequant_q4(w, s, rows, cols);
-    return dequant_rows(w, s, rows, cols);
+    return (float *)w->raw;
 }
 
-static float *get_vec(Tensor *t, uint32_t n, const char *base) {
-    Tensor *w = find(t, n, base);
-    if (!w) { fprintf(stderr, "missing tensor %s\n", base); exit(1); }
-    return dequant_plain(w);
+/* Turn a Mat into float in place, for the one case that has to modify weights: an adapter. */
+static void mat_to_float(Mat *m) {
+    if (m->f) return;
+    float *out = malloc(sizeof(float) * m->rows * m->cols);
+    for (int r = 0; r < m->rows; r++)
+        for (int c = 0; c < m->cols; c++)
+            out[(size_t)r * m->cols + c] = (float)m->q[(size_t)r * m->cols + c] * m->s[r];
+    m->f = out;
+    m->q = NULL;
+    m->s = NULL;
 }
 
 static void load_model(Model *m, const char *path) {
@@ -189,29 +216,32 @@ static void load_model(Model *m, const char *path) {
     Tensor *w1 = find(t, n, name);
     if (w1) m->ff = w1->dims[0];
 
-    m->emb = get_mat(t, n, "emb/weight", m->vocab, m->dim);
-    m->head = m->emb; /* tied */
+    m->tensors = t;          /* the buffers must outlive the model: Mats point into them */
+    m->ntensors = n;
+    m->emb = mat_of(t, n, "emb/weight", (int)m->vocab, (int)m->dim);
+    /* the embedding is looked up by row, not multiplied, so it is expanded once: 135 KB for the
+       demo model, and it keeps the lookup a plain array read */
+    mat_to_float(&m->emb);
+    m->head = m->emb;        /* tied */
 
     for (uint32_t l = 0; l < layers; l++) {
         snprintf(name, sizeof name, "blocks/%u/qkv/weight", l);
-        m->qkv[l]  = get_mat(t, n, name, 3 * m->dim, m->dim);
+        m->qkv[l]  = mat_of(t, n, name, (int)(3 * m->dim), (int)m->dim);
         snprintf(name, sizeof name, "blocks/%u/proj/weight", l);
-        m->proj[l] = get_mat(t, n, name, m->dim, m->dim);
+        m->proj[l] = mat_of(t, n, name, (int)m->dim, (int)m->dim);
         snprintf(name, sizeof name, "blocks/%u/w1/weight", l);
-        m->w1[l]   = get_mat(t, n, name, m->ff, m->dim);
+        m->w1[l]   = mat_of(t, n, name, (int)m->ff, (int)m->dim);
         snprintf(name, sizeof name, "blocks/%u/w3/weight", l);
-        m->w3[l]   = get_mat(t, n, name, m->ff, m->dim);
+        m->w3[l]   = mat_of(t, n, name, (int)m->ff, (int)m->dim);
         snprintf(name, sizeof name, "blocks/%u/w2/weight", l);
-        m->w2[l]   = get_mat(t, n, name, m->dim, m->ff);
+        m->w2[l]   = mat_of(t, n, name, (int)m->dim, (int)m->ff);
         snprintf(name, sizeof name, "blocks/%u/n1/w", l);
-        m->n1[l]   = get_vec(t, n, name);
+        m->n1[l]   = vec_of(t, n, name);
         snprintf(name, sizeof name, "blocks/%u/n2/w", l);
-        m->n2[l]   = get_vec(t, n, name);
+        m->n2[l]   = vec_of(t, n, name);
     }
-    m->nfinal = get_vec(t, n, "norm/w");
+    m->nfinal = vec_of(t, n, "norm/w");
     m->ok = 1;
-    for (uint32_t i = 0; i < n; i++) free(t[i].raw);
-    free(t);
 }
 
 
@@ -325,12 +355,22 @@ static void rmsnorm(const float *x, const float *w, float *out, int d) {
     for (int i = 0; i < d; i++) out[i] = w[i] * x[i] * inv;
 }
 
-static void matvec(const float *W, const float *x, float *y, int rows, int cols) {
+static void matvec(const Mat *m, const float *x, float *y) {
+    int rows = m->rows, cols = m->cols;
+    if (m->f) {
+        for (int r = 0; r < rows; r++) {
+            const float *row = m->f + (size_t)r * cols;
+            float acc = 0.0f;
+            for (int c = 0; c < cols; c++) acc += row[c] * x[c];
+            y[r] = acc;
+        }
+        return;
+    }
     for (int r = 0; r < rows; r++) {
-        const float *row = W + (size_t)r * cols;
+        const int8_t *row = m->q + (size_t)r * cols;
         float acc = 0.0f;
-        for (int c = 0; c < cols; c++) acc += row[c] * x[c];
-        y[r] = acc;
+        for (int c = 0; c < cols; c++) acc += (float)row[c] * x[c];
+        y[r] = acc * m->s[r];   /* one multiply per row instead of one per weight */
     }
 }
 
@@ -375,11 +415,11 @@ static void forward(Model *m, int token, int pos, Cache *c, float *logits) {
     float *x = c->x, *n1 = c->n1, *n2 = c->n2, *qkv = c->qkv, *att = c->att;
     float *h1 = c->h1, *h3 = c->h3, *hm = c->hm, *scores = c->scores;
 
-    for (int i = 0; i < d; i++) x[i] = m->emb[(size_t)token * d + i];
+    for (int i = 0; i < d; i++) x[i] = m->emb.f[(size_t)token * d + i];
 
     for (uint32_t l = 0; l < m->layers; l++) {
         rmsnorm(x, m->n1[l], n1, d);
-        matvec(m->qkv[l], n1, qkv, 3 * d, d);
+        matvec(&m->qkv[l], n1, qkv);
         float *q = qkv, *k = qkv + d, *v = qkv + 2 * d;
         rope(q, nh, dh, pos);
         rope(k, nh, dh, pos);
@@ -406,19 +446,19 @@ static void forward(Model *m, int token, int pos, Cache *c, float *logits) {
                 att[h * dh + j] = acc;
             }
         }
-        matvec(m->proj[l], att, n2, d, d);
+        matvec(&m->proj[l], att, n2);
         for (int i = 0; i < d; i++) x[i] += n2[i];
 
         rmsnorm(x, m->n2[l], n2, d);
-        matvec(m->w1[l], n2, h1, m->ff, d);
-        matvec(m->w3[l], n2, h3, m->ff, d);
+        matvec(&m->w1[l], n2, h1);
+        matvec(&m->w3[l], n2, h3);
         silu_mul(h1, h3, hm, m->ff);
-        matvec(m->w2[l], hm, n2, d, m->ff);
+        matvec(&m->w2[l], hm, n2);
         for (int i = 0; i < d; i++) x[i] += n2[i];
     }
 
     rmsnorm(x, m->nfinal, n1, d);
-    matvec(m->head, n1, logits, m->vocab, d);
+    matvec(&m->head, n1, logits);
 }
 
 /* ------------------------------------------------------------------ adapters */
@@ -436,7 +476,7 @@ static void apply_delta(Model *m, const char *path) {
 
     for (uint32_t l = 0; l < m->layers; l++) {
         const char *nm[5] = {"qkv", "proj", "w1", "w3", "w2"};
-        float **tgt[5] = {&m->qkv[l], &m->proj[l], &m->w1[l], &m->w3[l], &m->w2[l]};
+        Mat *tgt[5] = {&m->qkv[l], &m->proj[l], &m->w1[l], &m->w3[l], &m->w2[l]};
         int rows[5] = {(int)(3 * m->dim), (int)m->dim, (int)m->ff, (int)m->ff, (int)m->dim};
         int cols[5] = {(int)m->dim, (int)m->dim, (int)m->dim, (int)m->dim, (int)m->ff};
         for (int k = 0; k < 5; k++) {
@@ -447,12 +487,13 @@ static void apply_delta(Model *m, const char *path) {
             if (!A || !B) continue;
             int r = (int)A->dims[0], C = cols[k], R = rows[k];
             const float *a = (const float *)A->raw, *b = (const float *)B->raw;
-            float *W = *tgt[k];
+            mat_to_float(tgt[k]);   /* an adapter modifies weights, so this one matrix goes to float */
+            float *Wm = (float *)tgt[k]->f;
             for (int i = 0; i < R; i++)
                 for (int c = 0; c < C; c++) {
                     float acc = 0.0f;
                     for (int j = 0; j < r; j++) acc += b[(size_t)i * r + j] * a[(size_t)j * C + c];
-                    W[(size_t)i * C + c] += scale * acc;
+                    Wm[(size_t)i * C + c] += scale * acc;
                 }
             applied++;
         }
